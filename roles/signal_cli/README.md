@@ -57,26 +57,48 @@ Without `state.tar.gz.b64` signal-cli starts with an empty database: sending int
 group fails with `Group not found` until the group is learned again from an incoming
 message. The snapshot ages - refresh it after relevant group or contact changes.
 
-Export everything from a running instance (stop the daemon first, so the sqlite database
-is consistent):
-
-```bash
-N=+49123456789
-ssh admin@host 'sudo systemctl stop signal-cli'
-ssh admin@host 'sudo cat /var/lib/signal-cli/data/accounts.json' \
-  | pass insert -m private/network/signal/$N/accounts.json
-# <path> is the "path" field of that number's entry in accounts.json
-ssh admin@host 'sudo cat /var/lib/signal-cli/data/<path>' \
-  | pass insert -m private/network/signal/$N/account.json
-ssh admin@host 'sudo tar czf - -C /var/lib/signal-cli/data <path>.d | base64 -w0' \
-  | pass insert -m private/network/signal/$N/state.tar.gz.b64
-ssh admin@host 'sudo systemctl start signal-cli'
-```
+All three entries are created and refreshed by
+[`tools/signal_cli/export_account.py`](../../tools/signal_cli/export_account.py), see
+below.
 
 All of it is written read only to `/etc/signal-cli/accounts/<number>/` and restored into
 the state directory **only when that account is not there yet**, so a re-run never
 overwrites keys, sessions or databases rotated by the running daemon. signal-cli recreates
 whatever the snapshot does not contain.
+
+## Tool: export_account.py
+
+[`tools/signal_cli/export_account.py`](../../tools/signal_cli/export_account.py) writes the
+three password store entries from a machine that already runs the daemon - after the first
+registration, and again whenever the runtime state changed enough to matter. It stops the
+daemon while reading, so the sqlite database in the snapshot is consistent, starts it again
+afterwards even if the export fails, and pipes the content straight into `pass` without
+printing it. Existing entries are overwritten.
+
+```bash
+# remote host, sudo password taken from the password store
+tools/signal_cli/export_account.py \
+    --number +49123456789 \
+    --host agent.example.org \
+    --ssh-user admin \
+    --sudo-pass-entry private/network/admin@agent
+
+# on the machine itself, with passwordless sudo
+tools/signal_cli/export_account.py --number +49123456789
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--number` | required | E.164 number of the account to export |
+| `--host` | local machine | host running signal-cli, reached over SSH |
+| `--ssh-user` | current user | SSH user on that host |
+| `--sudo-pass-entry` | none | pass entry with that user's sudo password; omit when sudo needs none |
+| `--data-dir` | `/var/lib/signal-cli` | must match `signal_cli_data_dir` |
+| `--service` | `signal-cli` | systemd unit to stop and start |
+| `--pass-prefix` | `private/network/signal` | must match `signal_cli_account_pass_prefix` |
+| `--skip-state` | off | export only the two json entries |
+| `--keep-running` | off | do not stop the daemon; the snapshot may be inconsistent |
+| `--dry-run` | off | read everything, report sizes, write nothing |
 
 ## Variables
 

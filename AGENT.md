@@ -15,6 +15,8 @@ anything else from the private infrastructure it is used from - examples use pla
   * signal_cli - installs signal-cli, runs its JSON-RPC/REST daemon as a systemd service
     under the unprivileged `signal` user; read only configuration in /etc/signal-cli,
     writable state in /var/lib/signal-cli, accounts restored from the password store
+* tools - operational helper scripts, one directory per role, named `tools/<role_name>`
+  * signal_cli/export_account.py - exports a registered account into the password store
 
 Role directories must be named lowercase with underscores; a role is referenced as
 `andreasbehnke.ai_agent.<role_name>`.
@@ -49,6 +51,10 @@ These are binding for every role in this collection. They are also documented fo
   check mode) - pass the content through a fact instead.
 * **Variable naming** - every variable is prefixed with the role name and has a documented
   default in `defaults/main.yml`.
+* **Manual steps become tools** - a procedure that cannot be automated inside the role
+  (registering an account, exporting new secrets into the password store, key rotation)
+  is provided as a python script in `tools/<role_name>/`, standard library only,
+  documented in the role README. No ad hoc shell snippets in the documentation.
 
 ### Password store (pass)
 
@@ -69,9 +75,10 @@ Secrets are read on the controller with
 
 Create `roles/<role_name>/` using the standard role layout (`defaults/`, `tasks/`,
 `handlers/`, `templates/`, `meta/`) plus a `README.md` documenting its variables, the paths
-it creates and its password store entries. Then:
+it creates, its password store entries and its tools. Then:
 
 * follow the conventions above
+* put helper scripts for the manual steps into `tools/<role_name>/`
 * add a one sentence entry with a link to the role README under "Roles of this collection"
   in `README.md` - the role details belong in the role README, not in the collection one
 * add the role to the folder structure list above

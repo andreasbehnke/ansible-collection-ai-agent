@@ -33,6 +33,7 @@ They are usable elsewhere, but you should know which assumptions are baked in.
 | Pinned upstream versions | Release versions are pinned in `defaults/main.yml` rather than tracking "latest", so provisioning is reproducible. |
 | Dependencies stay with the caller | Shared runtimes (java, python, docker) are installed by the calling playbook. Roles only assert that a suitable version is present, so several roles can share one runtime without fighting over it. |
 | No secrets in git | Secrets come from the password store at run time (see below). Nothing secret is committed here, and tasks touching secrets run with `no_log: true`. |
+| Manual steps become tools | What a role cannot do itself - registering an account, exporting new secrets into the password store, key rotation - ships as a python script in `tools/<role_name>/` (standard library only) and is documented in that role's README, instead of as shell snippets in the documentation. |
 
 ### Password store (pass)
 

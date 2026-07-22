@@ -1,0 +1,37 @@
+---
+
+ - name: create the signal group
+   become: yes
+   ansible.builtin.group:
+    name: "{{ signal_cli_group }}"
+    system: yes
+
+ # Unprivileged service account without login shell, its home is the state
+ # directory so manual signal-cli calls end up in the right place.
+ - name: create the signal service user
+   become: yes
+   ansible.builtin.user:
+    name: "{{ signal_cli_user }}"
+    group: "{{ signal_cli_group }}"
+    home: "{{ signal_cli_data_dir }}"
+    create_home: no
+    shell: /usr/sbin/nologin
+    system: yes
+
+ - name: download and unpack signal-cli
+   become: yes
+   ansible.builtin.unarchive:
+    src: "https://github.com/AsamK/signal-cli/releases/download/v{{ signal_cli_version }}/signal-cli-{{ signal_cli_version }}.tar.gz"
+    dest: "{{ signal_cli_install_dir }}"
+    remote_src: yes
+    creates: "{{ signal_cli_install_dir }}/signal-cli-{{ signal_cli_version }}"
+    owner: root
+    group: root
+
+ - name: symlink signal-cli into PATH
+   become: yes
+   ansible.builtin.file:
+    src: "{{ signal_cli_install_dir }}/signal-cli-{{ signal_cli_version }}/bin/signal-cli"
+    dest: "{{ signal_cli_bin_link }}"
+    state: link
+   notify: restart signal-cli

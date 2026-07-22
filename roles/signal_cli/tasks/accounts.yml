@@ -1,0 +1,24 @@
+---
+
+ # Without configured accounts this is a fresh install: nothing is restored and
+ # the account has to be registered or linked manually afterwards.
+ - name: reproduce the configured signal accounts
+   ansible.builtin.include_tasks: account.yml
+   loop: "{{ signal_cli_accounts }}"
+   loop_control:
+    loop_var: signal_cli_account_item
+    label: "{{ signal_cli_account_item.number }}"
+
+ # The account registry lists all local accounts in a single file. It is only
+ # created, never updated: signal-cli rewrites it at runtime.
+ - name: install the signal-cli account registry
+   become: yes
+   ansible.builtin.copy:
+    content: "{{ {'version': signal_cli_registry_version | int, 'accounts': signal_cli_registry} | to_nice_json }}"
+    dest: "{{ signal_cli_data_dir }}/data/accounts.json"
+    owner: "{{ signal_cli_user }}"
+    group: "{{ signal_cli_group }}"
+    mode: "0600"
+    force: no
+   when: signal_cli_registry | default([]) | length > 0
+   notify: restart signal-cli

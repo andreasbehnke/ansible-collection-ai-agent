@@ -1,0 +1,18 @@
+---
+
+dependencies: []
+
+galaxy_info:
+  author: ab@andreasbehnke.com
+  description: Installs signal-cli and runs its JSON-RPC/REST daemon as a system service
+  license: GNU Public license V3
+  min_ansible_version: "2.16"
+  platforms:
+  - name: Ubuntu
+    versions:
+    - all
+  - name: Debian
+    versions:
+    - all
+  categories:
+    - system

@@ -1,0 +1,1 @@
+{{ ({'dataDir': signal_cli_data_dir} | combine({'account': signal_cli_account} if signal_cli_account else {})) | to_nice_json }}

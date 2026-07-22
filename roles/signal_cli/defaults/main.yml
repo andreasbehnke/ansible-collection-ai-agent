@@ -1,0 +1,42 @@
+---
+
+  # ---- signal-cli release ----
+  signal_cli_version: "0.14.6"
+  signal_cli_install_dir: /opt
+  signal_cli_bin_link: /usr/local/bin/signal-cli
+  # signal-cli 0.14.x is compiled for java 25 (class file 69.0). The java runtime
+  # itself is not installed by this role, only checked for.
+  signal_cli_java_min_version: 25
+
+  # ---- service identity ----
+  signal_cli_user: signal
+  signal_cli_group: signal
+  signal_cli_service_name: signal-cli
+
+  # ---- directories ----
+  # Ansible managed material, read only for the service (root owned).
+  signal_cli_config_dir: /etc/signal-cli
+  # signal-cli needs full read/write access to its data directory: it rotates
+  # prekeys and keeps sessions in a sqlite database. It is therefore separate
+  # from the read only configuration directory and seeded from it once.
+  signal_cli_data_dir: /var/lib/signal-cli
+
+  # ---- REST / JSON-RPC daemon ----
+  # The HTTP API has no authentication, it must stay on the loopback interface.
+  signal_cli_http_host: "127.0.0.1"
+  signal_cli_http_port: 8080
+  signal_cli_receive_mode: on-start
+  signal_cli_ignore_attachments: false
+
+  # ---- accounts ----
+  # E.164 number the daemon serves. May stay empty if exactly one account exists
+  # in the data directory.
+  signal_cli_account: ""
+  # Existing accounts to reproduce from the password store. Empty means a fresh
+  # install: the service is installed and enabled but not started, until an
+  # account has been registered or linked manually.
+  # Entries: { number: "+49...", pass_path: "<optional pass path>" }
+  signal_cli_accounts: []
+  # Password store location holding <pass_path>/accounts.json and
+  # <pass_path>/account.json for each account, defaults to <prefix>/<number>.
+  signal_cli_account_pass_prefix: "private/network/signal"

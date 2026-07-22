@@ -8,6 +8,9 @@ Ansible collection `andreasbehnke.ai_agent`, holding the roles which provision A
 * galaxy.yml - collection metadata, bump `version` when the collection changes
 * meta/runtime.yml - minimum supported ansible version
 * roles - the roles of this collection, one directory per role, standard role layout
+  * signal_cli - installs signal-cli, runs its JSON-RPC/REST daemon as a systemd service
+    under the unprivileged `signal` user; read only configuration in /etc/signal-cli,
+    writable state in /var/lib/signal-cli, accounts restored from the password store
 
 Role directories must be named lowercase with underscores; a role is referenced as
 `andreasbehnke.ai_agent.<role_name>`.

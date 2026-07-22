@@ -1,0 +1,73 @@
+---
+
+ # Restores one existing account from the password store. The pass entries hold
+ # the two signal-cli account files verbatim, secrets never touch this
+ # repository. signal-cli recreates the sqlite database in <path>.d/ and
+ # re-fetches group and session state from the server on first start.
+
+ - name: determine the password store path for {{ signal_cli_account_item.number }}
+   ansible.builtin.set_fact:
+    signal_cli_account_pass_path: "{{ signal_cli_account_item.pass_path | default(signal_cli_account_pass_prefix ~ '/' ~ signal_cli_account_item.number) }}"
+
+ - name: read the account files from the password store
+   ansible.builtin.set_fact:
+    signal_cli_accounts_json: "{{ lookup('community.general.passwordstore', signal_cli_account_pass_path ~ '/accounts.json', returnall=true) }}"
+    signal_cli_account_json: "{{ lookup('community.general.passwordstore', signal_cli_account_pass_path ~ '/account.json', returnall=true) }}"
+   no_log: true
+
+ # The registry entry names the data file of the account: data/<path> plus the
+ # runtime directory data/<path>.d/.
+ - name: determine the account data file name
+   ansible.builtin.set_fact:
+    signal_cli_account_entry: "{{ (signal_cli_accounts_json | from_json).accounts | selectattr('number', 'equalto', signal_cli_account_item.number) | first }}"
+
+ - name: create the read only account directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account_item.number }}"
+    state: directory
+    owner: root
+    group: "{{ signal_cli_group }}"
+    mode: "0750"
+
+ - name: install the read only account files
+   become: yes
+   ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account_item.number }}/{{ item.name }}"
+    owner: root
+    group: "{{ signal_cli_group }}"
+    mode: "0640"
+   loop:
+     - name: accounts.json
+       content: "{{ signal_cli_accounts_json }}"
+     - name: account.json
+       content: "{{ signal_cli_account_json }}"
+   loop_control:
+    label: "{{ item.name }}"
+   no_log: true
+
+ - name: check whether the account is already present in the state directory
+   become: yes
+   ansible.builtin.stat:
+    path: "{{ signal_cli_data_dir }}/data/{{ signal_cli_account_entry.path }}"
+   register: signal_cli_account_state
+
+ # Seeded once only, so prekeys and sessions rotated by the running daemon are
+ # never overwritten by the snapshot from the password store.
+ - name: seed the account into the state directory
+   become: yes
+   ansible.builtin.copy:
+    src: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account_item.number }}/account.json"
+    dest: "{{ signal_cli_data_dir }}/data/{{ signal_cli_account_entry.path }}"
+    remote_src: yes
+    owner: "{{ signal_cli_user }}"
+    group: "{{ signal_cli_group }}"
+    mode: "0600"
+   when: not signal_cli_account_state.stat.exists
+   notify: restart signal-cli
+
+ - name: collect the registry entry of {{ signal_cli_account_item.number }}
+   ansible.builtin.set_fact:
+    signal_cli_registry: "{{ (signal_cli_registry | default([])) + [signal_cli_account_entry] }}"
+    signal_cli_registry_version: "{{ [signal_cli_registry_version | default(2) | int, (signal_cli_accounts_json | from_json).version | default(2) | int] | max }}"

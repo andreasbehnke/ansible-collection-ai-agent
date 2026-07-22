@@ -8,7 +8,9 @@ Fully qualified collection name: `andreasbehnke.ai_agent`
 
 * `galaxy.yml` - collection metadata (namespace, name, version)
 * `meta/runtime.yml` - minimum supported ansible version
-* `roles/` - the roles of this collection
+* `roles/` - the roles of this collection:
+  * [`signal_cli`](roles/signal_cli/README.md) - signal-cli and its JSON-RPC/REST daemon,
+    running as the unprivileged `signal` user on the loopback interface
 
 ## Adding a role
 

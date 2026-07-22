@@ -1,0 +1,35 @@
+---
+
+ - name: assert the REST api stays on the loopback interface
+   ansible.builtin.assert:
+    that:
+      - signal_cli_http_host in ['127.0.0.1', '::1', 'localhost']
+    fail_msg: >-
+      signal_cli_http_host is '{{ signal_cli_http_host }}'. The signal-cli HTTP
+      api has no authentication and must not be reachable off host.
+
+ - name: read the java version
+   ansible.builtin.command: java -version
+   register: signal_cli_java_check
+   changed_when: false
+   failed_when: false
+   check_mode: no
+
+ - name: assert a java runtime is installed
+   ansible.builtin.assert:
+    that:
+      - signal_cli_java_check.rc == 0
+    fail_msg: >-
+      no java runtime found on PATH. signal-cli {{ signal_cli_version }} needs
+      java {{ signal_cli_java_min_version }} or later, install it before this role.
+
+ # java -version writes "openjdk version "25.0.1" ..." to stderr.
+ - name: assert the java version is recent enough
+   ansible.builtin.assert:
+    that:
+      - java_major | int >= signal_cli_java_min_version | int
+    fail_msg: >-
+      java {{ java_major }} found, signal-cli {{ signal_cli_version }} needs
+      java {{ signal_cli_java_min_version }} or later.
+   vars:
+    java_major: "{{ signal_cli_java_check.stderr | regex_search('version \"([0-9]+)', '\\1') | default(['0'], true) | first }}"

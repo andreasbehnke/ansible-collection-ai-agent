@@ -1,0 +1,30 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=signal-cli daemon (JSON-RPC / REST api on {{ signal_cli_http_host }}:{{ signal_cli_http_port }})
+Documentation=https://github.com/AsamK/signal-cli
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ signal_cli_user }}
+Group={{ signal_cli_group }}
+ExecStart={{ signal_cli_bin_link }} --config {{ signal_cli_data_dir }}{% if signal_cli_account %} --account {{ signal_cli_account }}{% endif %} daemon --http {{ signal_cli_http_host }}:{{ signal_cli_http_port }} --receive-mode {{ signal_cli_receive_mode }} --no-receive-stdout{% if signal_cli_ignore_attachments %} --ignore-attachments{% endif %}
+
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+# The configuration directory stays read only for the service, only the state
+# directory is writable.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ signal_cli_data_dir }}
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

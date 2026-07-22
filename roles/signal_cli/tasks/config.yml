@@ -1,0 +1,40 @@
+---
+
+ # Read only configuration directory: root owned, only readable by the service.
+ - name: create the configuration directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ signal_cli_group }}"
+    mode: "0750"
+   loop:
+     - "{{ signal_cli_config_dir }}"
+     - "{{ signal_cli_config_dir }}/accounts"
+
+ # System wide configuration read by every signal-cli invocation. Setting
+ # dataDir here means manual calls (registration, troubleshooting) use the same
+ # state directory as the daemon without passing --config.
+ - name: install the signal-cli configuration file
+   become: yes
+   ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ signal_cli_config_dir }}/config.json"
+    owner: root
+    group: "{{ signal_cli_group }}"
+    mode: "0640"
+   notify: restart signal-cli
+
+ # Writable state directory, owned by the service user.
+ - name: create the state directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ signal_cli_user }}"
+    group: "{{ signal_cli_group }}"
+    mode: "0700"
+   loop:
+     - "{{ signal_cli_data_dir }}"
+     - "{{ signal_cli_data_dir }}/data"

@@ -1,0 +1,10 @@
+---
+
+ # Restarting is pointless without an account: the daemon would only crash loop.
+ - name: restart signal-cli
+   become: yes
+   ansible.builtin.systemd_service:
+    name: "{{ signal_cli_service_name }}"
+    state: restarted
+    daemon_reload: yes
+   when: signal_cli_registry_state.stat.exists | default(false)

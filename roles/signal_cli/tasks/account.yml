@@ -58,13 +58,13 @@
  - name: seed the account into the state directory
    become: yes
    ansible.builtin.copy:
-    src: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account_item.number }}/account.json"
+    content: "{{ signal_cli_account_json }}"
     dest: "{{ signal_cli_data_dir }}/data/{{ signal_cli_account_entry.path }}"
-    remote_src: yes
     owner: "{{ signal_cli_user }}"
     group: "{{ signal_cli_group }}"
     mode: "0600"
    when: not signal_cli_account_state.stat.exists
+   no_log: true
    notify: restart signal-cli
 
  - name: collect the registry entry of {{ signal_cli_account_item.number }}

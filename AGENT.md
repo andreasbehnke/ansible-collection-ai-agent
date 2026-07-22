@@ -17,6 +17,8 @@ anything else from the private infrastructure it is used from - examples use pla
     writable state in /var/lib/signal-cli, accounts restored from the password store
 * tools - operational helper scripts, one directory per role, named `tools/<role_name>`
   * signal_cli/export_account.py - exports a registered account into the password store
+  * signal_cli/register_landline.py - registers a new account for a landline number by
+    voice verification
 
 Role directories must be named lowercase with underscores; a role is referenced as
 `andreasbehnke.ai_agent.<role_name>`.

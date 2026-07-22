@@ -100,6 +100,85 @@ tools/signal_cli/export_account.py --number +49123456789
 | `--keep-running` | off | do not stop the daemon; the snapshot may be inconsistent |
 | `--dry-run` | off | read everything, report sizes, write nothing |
 
+## Tool: register_landline.py
+
+[`tools/signal_cli/register_landline.py`](../../tools/signal_cli/register_landline.py)
+registers a **new** Signal account for a **landline** number. A landline cannot receive
+the SMS verification code, so registration must use Signal's voice-call verification -
+more finicky than SMS (a captcha is required, and the voice request must follow a primed
+SMS request), which is why it is scripted. A number that is already registered is restored
+from the password store instead, no re-registration needed.
+
+The script drives signal-cli over SSH and walks through the sequence that works for a
+voice-only number:
+
+1. check SSH reachability and that `sudo` to the signal user works
+2. refuse to run if the number already looks registered (unless `--force`)
+3. `systemctl stop signal-cli` - release the account lock
+4. `deleteLocalAccountData --ignore-registered` - start from a clean session, stale
+   half-sessions are the main cause of failures
+5. **you** solve one captcha and paste the `signalcaptcha://…` token
+6. `register --captcha <token>` - the SMS attempt is rejected for a landline
+   (`InvalidTransportModeException`, expected) but it **primes the session**
+7. `register --voice --captcha <token>` - Signal places an automated voice call
+8. **you** answer the call and enter the 6-digit code
+9. `verify <code>` - immediately, so the session cannot expire
+10. `systemctl start signal-cli` and check the daemon is active and
+    `/api/v1/check` returns HTTP 200
+
+**Prerequisites**: the host already provisioned by this role; SSH access as a user with
+sudo rights (passwordless, or with `--sudo-pass-entry`); a phone that receives calls on
+the number; a browser for the captcha; python 3 and `ssh` locally.
+
+```bash
+tools/signal_cli/register_landline.py \
+    --number +49123456789 \
+    --host agent.example.org \
+    --ssh-user admin \
+    --sudo-pass-entry private/network/admin@agent
+
+# re-register a number that is already registered (WIPES the existing account)
+tools/signal_cli/register_landline.py --number +49123456789 --host agent.example.org --force
+```
+
+Options beyond those: `--signal-user` (default `signal`), `--service` (default
+`signal-cli`), `--data-dir` (default `/var/lib/signal-cli`), `--api-url` (default
+`http://127.0.0.1:8080`), `--host-key-checking` (default `accept-new`). They have to match
+the role variables when those were overridden.
+
+**Getting the captcha token**: open
+<https://signalcaptchas.org/registration/generate.html>, solve the captcha, then
+right-click the *Open Signal* link and copy the link address - do **not** click it. It
+starts with `signalcaptcha://`. Tokens are single use and short lived, get a fresh one if
+the script asks again.
+
+Afterwards export the new account into the password store with
+[`export_account.py`](#tool-export_accountpy), otherwise a rebuilt machine has to go
+through the registration again.
+
+**Troubleshooting**
+
+| Symptom | Meaning / fix |
+|---|---|
+| `InvalidTransportModeException` on `register --captcha` | Expected for a landline (no SMS). The session is primed, the script continues to the voice request. |
+| `Captcha required` / `AuthorizationFailedException` | The token is missing, expired or already used. Get a fresh one and re-run. |
+| `Before requesting voice verification you need to request SMS verification and wait a minute` | The session was not primed. Re-run from a clean state, with a fresh captcha. |
+| `verify` returns `StatusCode: 404` | The verification session expired, usually from re-requesting the call or a long delay. Re-run the whole flow and enter the code immediately after the call. |
+| No call arrives | Signal rate-limits. Wait a minute and re-run cleanly with a fresh captcha, rather than requesting twice in one session - double requests invalidate the code. |
+| Service stays `activating` or crash-loops after start | The account is not registered/verified, or `signal_cli_account` does not match the registered number. Check `journalctl -u signal-cli -n 30`. |
+
+**Manual equivalent**, for reference. `/etc/signal-cli/config.json` points signal-cli at
+the state directory, so no `--config` is needed:
+
+```bash
+sudo systemctl stop signal-cli
+sudo -u signal -H signal-cli -a +49123456789 deleteLocalAccountData --ignore-registered
+sudo -u signal -H signal-cli -a +49123456789 register --captcha 'signalcaptcha://…'
+sudo -u signal -H signal-cli -a +49123456789 register --voice --captcha 'signalcaptcha://…'
+sudo -u signal -H signal-cli -a +49123456789 verify 123456
+sudo systemctl start signal-cli
+```
+
 ## Variables
 
 | Variable | Default | Description |

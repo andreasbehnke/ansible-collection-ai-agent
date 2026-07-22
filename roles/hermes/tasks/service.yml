@@ -1,15 +1,29 @@
 ---
 
  # Upstream generates the unit, so its service definition stays compatible with
- # the gateway (watchdog, exec line). Everything we care about is set in the
+ # the gateway (watchdog, exec line). --run-as-user makes it bake in the service
+ # user, otherwise the installer records whoever ran it (root/SUDO_USER) and the
+ # gateway's own tooling (gateway status regenerates and compares the unit) then
+ # reaches into that user's home and fails. Hardening on top comes from the
  # drop-in below.
+ - name: read the installed gateway unit
+   become: yes
+   ansible.builtin.slurp:
+    src: "/etc/systemd/system/{{ hermes_service_name }}.service"
+   register: hermes_unit_file
+   failed_when: false
+
  - name: install the hermes gateway system service
    become: yes
-   ansible.builtin.command: "{{ hermes_bin }} gateway install --system"
+   ansible.builtin.command: >-
+    {{ hermes_bin }} gateway install --system
+    --run-as-user {{ hermes_user }} --force
    environment:
     HERMES_HOME: "{{ hermes_home }}"
-   args:
-    creates: "/etc/systemd/system/{{ hermes_service_name }}.service"
+   when: >-
+    hermes_unit_file.content is not defined or
+    ('User=' ~ hermes_user) not in (hermes_unit_file.content | b64decode)
+   notify: restart hermes
 
  # The installer and the service installer run as root and leave root owned
  # files behind in the state directory (logs above all), which the service

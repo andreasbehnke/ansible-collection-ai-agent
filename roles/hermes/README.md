@@ -34,8 +34,21 @@ at leaf level - pinning `model.default` leaves the rest of `model.*` user config
 Check what is in effect with:
 
 ```bash
-sudo -u hermes HERMES_HOME=/var/lib/hermes hermes config
-sudo -u hermes HERMES_HOME=/var/lib/hermes hermes doctor
+sudo hermesctl config
+sudo hermesctl doctor
+```
+
+## Running the CLI: `hermesctl`
+
+Because `/etc/hermes` and `/var/lib/hermes` are not readable by other users, running `hermes`
+from a normal login fails at startup (`PermissionError` on `/etc/hermes/.env`). The role
+installs a wrapper `hermesctl` (path `hermes_ctl_bin`) that runs the CLI as the service user
+against its state - use it from any account with sudo rights:
+
+```bash
+sudo hermesctl config     # sudo -u hermes HERMES_HOME=/var/lib/hermes hermes config
+sudo hermesctl doctor
+sudo hermesctl setup
 ```
 
 ## Service
@@ -53,7 +66,7 @@ model and a messaging platform the gateway would only crash loop. Configure the 
 run the role again:
 
 ```bash
-sudo -u hermes HERMES_HOME=/var/lib/hermes hermes setup
+sudo hermesctl setup
 ```
 
 Once a setting should no longer be changeable from a chat session, move it from the state
@@ -98,6 +111,7 @@ named after the Hermes key they carry: `hermes_signal_allowed_users` for
 | `hermes_packages` | `[git, curl, xz-utils, build-essential]` | OS packages the installer needs, installed by this role |
 | `hermes_installer_url` | `https://hermes-agent.nousresearch.com/install.sh` | installer, run as root; there is no version pinning, use `hermes update` |
 | `hermes_bin` | `/usr/local/bin/hermes` | launcher path the installer creates |
+| `hermes_ctl_bin` | `/usr/local/bin/hermesctl` | operator wrapper running the CLI as the service user; `""` skips it |
 | `hermes_code_dir` | `/usr/local/lib/hermes-agent` | code path the installer creates |
 | `hermes_config_dir` | `/etc/hermes` | managed scope; a different path is passed to the service as `HERMES_MANAGED_DIR` |
 | `hermes_home` | `/var/lib/hermes` | `HERMES_HOME`, the writable state directory |

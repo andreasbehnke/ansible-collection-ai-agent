@@ -19,6 +19,10 @@
   # Locations the installer uses when it runs as root.
   hermes_bin: /usr/local/bin/hermes
   hermes_code_dir: /usr/local/lib/hermes-agent
+  # Operator wrapper that runs the CLI as the service user against its managed
+  # state, so a sudo-capable login does not need to know user, HERMES_HOME and
+  # the fact that both directories are unreadable to it. Set to "" to skip it.
+  hermes_ctl_bin: /usr/local/bin/hermesctl
 
   # ---- directories ----
   # Managed scope: administrator owned policy, not writable by the agent.

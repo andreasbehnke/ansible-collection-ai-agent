@@ -57,3 +57,15 @@
     creates: "{{ hermes_bin }}"
    register: hermes_install
 
+ # Operator convenience: run the CLI as the service user without knowing the
+ # user, HERMES_HOME and that both directories are unreadable to other logins.
+ - name: install the hermesctl operator wrapper
+   become: yes
+   ansible.builtin.template:
+    src: hermesctl.j2
+    dest: "{{ hermes_ctl_bin }}"
+    owner: root
+    group: root
+    mode: "0755"
+   when: hermes_ctl_bin | length > 0
+

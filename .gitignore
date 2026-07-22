@@ -1,0 +1,3 @@
+*.retry
+*.tar.gz
+__pycache__/

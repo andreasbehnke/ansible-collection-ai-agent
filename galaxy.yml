@@ -1,0 +1,24 @@
+---
+
+namespace: andreasbehnke
+name: ai_agent
+version: 0.1.0
+readme: README.md
+authors:
+  - ab@andreasbehnke.com
+description: Ansible roles for provisioning AI agents.
+license:
+  - GPL-3.0-or-later
+tags:
+  - ai
+  - agent
+  - debian
+  - ubuntu
+  - linux
+dependencies: {}
+repository: https://github.com/andreasbehnke/ansible-collection-ai-agent
+issues: https://github.com/andreasbehnke/ansible-collection-ai-agent/issues
+build_ignore:
+  - .git
+  - .gitignore
+  - AGENT.md

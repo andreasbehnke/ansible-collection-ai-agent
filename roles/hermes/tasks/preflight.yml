@@ -1,0 +1,12 @@
+---
+
+ # The managed scope must stay outside the writable state directory, otherwise
+ # the agent could rewrite its own policy.
+ - name: assert the state directory is separate from the managed scope
+   ansible.builtin.assert:
+    that:
+      - not hermes_home.startswith(hermes_config_dir ~ '/')
+      - hermes_home != hermes_config_dir
+    fail_msg: >-
+      hermes_home ({{ hermes_home }}) must not be inside the managed configuration
+      directory ({{ hermes_config_dir }}).

@@ -1,0 +1,36 @@
+---
+
+ # Managed scope: root owned, readable by the service only. Upstream documents
+ # 0755/0644 and therefore keeps secrets out of the managed .env; tightened to
+ # 0750/0640 the file is not world readable and may hold them.
+ - name: create the managed configuration directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ hermes_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ hermes_group }}"
+    mode: "0750"
+
+ # The secret values are resolved from the password store inside the template,
+ # so an empty mapping does not touch the store at all.
+ - name: install the managed environment file
+   become: yes
+   ansible.builtin.template:
+    src: env.j2
+    dest: "{{ hermes_config_dir }}/.env"
+    owner: root
+    group: "{{ hermes_group }}"
+    mode: "0640"
+   no_log: true
+   notify: restart hermes
+
+ - name: install the managed configuration file
+   become: yes
+   ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ hermes_config_dir }}/config.yaml"
+    owner: root
+    group: "{{ hermes_group }}"
+    mode: "0640"
+   notify: restart hermes

@@ -33,6 +33,10 @@ They are usable elsewhere, but you should know which assumptions are baked in.
 | Pinned upstream versions | Release versions are pinned in `defaults/main.yml` rather than tracking "latest", so provisioning is reproducible. |
 | Dependencies stay with the caller | Shared runtimes (java, python, docker) are installed by the calling playbook. Roles only assert that a suitable version is present, so several roles can share one runtime without fighting over it. |
 | No secrets in git | Secrets come from the password store at run time (see below). Nothing secret is committed here, and tasks touching secrets run with `no_log: true`. |
+| Upstream keys keep their name | A variable carrying the value of an upstream configuration key is named `<role>_<upstream key in lower case>` - `hermes_signal_allowed_users` for Hermes' `SIGNAL_ALLOWED_USERS` - never an invented name. Variables without an upstream counterpart keep the plain role prefix. |
+| Cross-role configuration is wired in the playbook | Roles never read each other's variables. A role exposes what it owns and stays unaware of its consumers; the playbook includes the producing role with `public: yes` and passes the values into the consuming role's input variable. |
+| Use the upstream policy scope | When the software offers an administrator controlled configuration layer, the role configures through it - root owned, readable by the service group only (`0750` / `0640`) - so the service cannot rewrite its own policy. Tightening upstream's world readable defaults is what allows secrets to live there. |
+| Upstream service installer plus drop-in | When upstream generates its own systemd unit, it is installed with the upstream command and left untouched; identity, environment and hardening come from an ansible owned `*.service.d/` drop-in. |
 | Manual steps become tools | What a role cannot do itself - registering an account, exporting new secrets into the password store, key rotation - ships as a python script in `tools/<role_name>/` (standard library only) and is documented in that role's README, instead of as shell snippets in the documentation. |
 
 ### Password store (pass)
@@ -58,6 +62,13 @@ back into it after a manual step (registration, linking, key rotation) is part o
 procedure - each role's README documents the export commands.
 
 ## Roles of this collection
+
+### [hermes](roles/hermes/README.md)
+
+Hermes is the agent runtime itself, so this role installs it system wide and runs its
+messaging gateway as a hardened systemd service, configured through Hermes' managed scope -
+see [`roles/hermes/README.md`](roles/hermes/README.md) for its variables, directory layout
+and what "managed scope" pins.
 
 ### [signal_cli](roles/signal_cli/README.md)
 

@@ -12,6 +12,9 @@ anything else from the private infrastructure it is used from - examples use pla
 * meta/runtime.yml - minimum supported ansible version
 * README.md - user facing documentation: setup conventions and the list of roles
 * roles - the roles of this collection, one directory per role, standard role layout
+  * hermes - installs the Hermes agent system wide (root mode installer), runs its
+    messaging gateway as a systemd service under the unprivileged `hermes` user; managed
+    scope configuration in /etc/hermes, state in /var/lib/hermes (HERMES_HOME)
   * signal_cli - installs signal-cli, runs its JSON-RPC/REST daemon as a systemd service
     under the unprivileged `signal` user; read only configuration in /etc/signal-cli,
     writable state in /var/lib/signal-cli, accounts restored from the password store
@@ -53,6 +56,26 @@ These are binding for every role in this collection. They are also documented fo
   check mode) - pass the content through a fact instead.
 * **Variable naming** - every variable is prefixed with the role name and has a documented
   default in `defaults/main.yml`.
+* **Upstream keys keep their name** - a variable carrying the value of an upstream
+  configuration key is named `<role>_<upstream key in lower case>`, never an invented name:
+  Hermes' `SIGNAL_ALLOWED_USERS` becomes `hermes_signal_allowed_users`. Variables without an
+  upstream counterpart keep the plain role prefix.
+* **Cross-role configuration is wired in the playbook** - roles never read each other's
+  variables. A role exposes what it owns through its own documented variables and stays
+  unaware of who consumes them; the composing playbook includes the producing role with
+  `public: yes` (an `include_role` is `public: false` by default, so its defaults would not
+  be visible afterwards) and passes the values into the consuming role's input variable. The
+  consuming role takes them as data, it does not know the producer.
+* **Use the upstream policy scope** - when the software offers an administrator controlled
+  configuration layer (Hermes managed scope, `/etc/hermes`), configure through it instead of
+  through the service's own configuration: root owned, readable by the service group only
+  (`0750` / `0640`), so the service cannot rewrite its own policy. Tightening upstream's
+  world readable defaults is what allows secrets to live there; document the deviation in
+  the role README.
+* **Upstream service installer plus drop-in** - when upstream generates its own systemd
+  unit, install it with the upstream command (guarded by `creates:`) and keep the unit
+  itself untouched. Identity, environment and hardening go into an ansible owned
+  `*.service.d/10-ansible.conf` drop-in, so upstream stays free to change the unit.
 * **Manual steps become tools** - a procedure that cannot be automated inside the role
   (registering an account, exporting new secrets into the password store, key rotation)
   is provided as a python script in `tools/<role_name>/`, standard library only,

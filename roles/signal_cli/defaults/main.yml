@@ -4,9 +4,18 @@
   signal_cli_version: "0.14.6"
   signal_cli_install_dir: /opt
   signal_cli_bin_link: /usr/local/bin/signal-cli
-  # signal-cli 0.14.x is compiled for java 25 (class file 69.0). The java runtime
-  # itself is not installed by this role, only checked for.
-  signal_cli_java_min_version: 25
+  # ---- java runtime ----
+  # signal-cli 0.14.x is compiled for java 25 (class file 69.0). Current
+  # distributions do not ship it, so tasks/java.yml installs Eclipse Temurin
+  # from the Adoptium repository. Set this to false once the distribution offers
+  # java signal_cli_java_min_version itself, the role then only verifies it.
+  signal_cli_install_java: true
+  signal_cli_java_version: "25"
+  # Older runtimes to remove, so /usr/bin/java resolves to the one installed above.
+  signal_cli_java_packages_absent:
+    - openjdk-21-jre-headless
+  # Verified before signal-cli is installed, whoever provided the runtime.
+  signal_cli_java_min_version: "{{ signal_cli_java_version }}"
 
   # ---- service identity ----
   signal_cli_user: signal

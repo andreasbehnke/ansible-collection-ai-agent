@@ -1,0 +1,62 @@
+---
+
+ # Upstream generates the unit, so its service definition stays compatible with
+ # the gateway (watchdog, exec line). Everything we care about is set in the
+ # drop-in below.
+ - name: install the hermes gateway system service
+   become: yes
+   ansible.builtin.command: "{{ hermes_bin }} gateway install --system"
+   environment:
+    HERMES_HOME: "{{ hermes_home }}"
+   args:
+    creates: "/etc/systemd/system/{{ hermes_service_name }}.service"
+
+ - name: create the systemd drop-in directory
+   become: yes
+   ansible.builtin.file:
+    path: "/etc/systemd/system/{{ hermes_service_name }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+ - name: install the systemd drop-in
+   become: yes
+   ansible.builtin.template:
+    src: service-override.conf.j2
+    dest: "/etc/systemd/system/{{ hermes_service_name }}.service.d/10-ansible.conf"
+    owner: root
+    group: root
+    mode: "0644"
+   notify: restart hermes
+
+ - name: enable the hermes gateway at boot time
+   become: yes
+   ansible.builtin.systemd_service:
+    name: "{{ hermes_service_name }}"
+    daemon_reload: yes
+    enabled: yes
+
+ - name: check whether hermes is configured
+   become: yes
+   ansible.builtin.stat:
+    path: "{{ hermes_home }}/config.yaml"
+   register: hermes_state_config
+
+ # An unconfigured agent has no model and no messaging platform, the gateway
+ # would only crash loop. It is started once a configuration exists.
+ - name: start the hermes gateway
+   become: yes
+   ansible.builtin.systemd_service:
+    name: "{{ hermes_service_name }}"
+    state: started
+   when: hermes_state_config.stat.exists
+
+ - name: report the missing configuration
+   ansible.builtin.debug:
+    msg: >-
+      No configuration in {{ hermes_home }}/config.yaml. {{ hermes_service_name }} is
+      enabled but not started. Configure the agent with
+      "sudo -u {{ hermes_user }} HERMES_HOME={{ hermes_home }} {{ hermes_bin }} setup",
+      then run this role again.
+   when: not hermes_state_config.stat.exists

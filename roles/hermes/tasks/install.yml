@@ -1,0 +1,68 @@
+---
+
+ - name: install the prerequisites of the hermes installer
+   become: yes
+   ansible.builtin.apt:
+    name: "{{ hermes_packages }}"
+    state: present
+    update_cache: yes
+   when: hermes_packages | length > 0
+
+ - name: create the hermes group
+   become: yes
+   ansible.builtin.group:
+    name: "{{ hermes_group }}"
+    system: yes
+
+ # Unprivileged service account without login shell. move_home is off, so an
+ # earlier per user installation stays where it is and can serve as fallback.
+ - name: create the hermes service user
+   become: yes
+   ansible.builtin.user:
+    name: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    home: "{{ hermes_home }}"
+    move_home: no
+    create_home: no
+    shell: /usr/sbin/nologin
+    system: yes
+
+ - name: create the state directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ hermes_home }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    mode: "0700"
+
+ - name: download the hermes installer
+   become: yes
+   ansible.builtin.get_url:
+    url: "{{ hermes_installer_url }}"
+    dest: /usr/local/src/hermes-install.sh
+    owner: root
+    group: root
+    mode: "0700"
+
+ # Run as root: this installs the code to {{ hermes_code_dir }} and the launcher
+ # to {{ hermes_bin }}, both root owned, so the agent cannot modify its own code.
+ # The data directory is taken from HERMES_HOME.
+ - name: install hermes
+   become: yes
+   ansible.builtin.command: /usr/local/src/hermes-install.sh
+   environment:
+    HERMES_HOME: "{{ hermes_home }}"
+   args:
+    creates: "{{ hermes_bin }}"
+   register: hermes_install
+
+ - name: own the state directory after the installation
+   become: yes
+   ansible.builtin.file:
+    path: "{{ hermes_home }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    recurse: yes
+   when: hermes_install is changed

@@ -1,5 +1,8 @@
 ---
 
+ # Runs before preflight, which then verifies the runtime it installed.
+ - include_tasks: java.yml
+   when: signal_cli_install_java
  - include_tasks: preflight.yml
  - include_tasks: install.yml
  - include_tasks: config.yml

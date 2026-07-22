@@ -1,0 +1,7 @@
+{{ ansible_managed | comment }}
+# Managed scope configuration, pins the keys set here at leaf level: they cannot
+# be changed from a session or from ~/.hermes/config.yaml. Empty means nothing is
+# pinned and every setting stays user configurable.
+{% if hermes_managed_config %}
+{{ hermes_managed_config | to_nice_yaml(indent=2) }}
+{% endif %}

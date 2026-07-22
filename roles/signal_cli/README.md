@@ -9,9 +9,19 @@ have to register its phone number again.
 The api endpoints are `/api/v1/rpc` (JSON-RPC), `/api/v1/events` (server sent events) and
 `/api/v1/check` (health).
 
-**Requires** a java runtime of `signal_cli_java_min_version` or later on `PATH`. It is
-*not* installed by this role, only asserted, so the calling playbook stays in charge of
-the shared runtime.
+## Java runtime
+
+signal-cli 0.14.x is compiled for **java 25** (class file 69.0), which current
+distributions do not ship: Ubuntu 24.04 LTS and Debian 12 top out at java 21. `tasks/java.yml`
+therefore adds the [Adoptium](https://adoptium.net/) repository, installs
+`temurin-{{ signal_cli_java_version }}-jre` and removes the older runtimes listed in
+`signal_cli_java_packages_absent`, so `/usr/bin/java` resolves to the new one. Whoever
+installed it, `preflight` verifies that `java` on `PATH` is at least
+`signal_cli_java_min_version` before signal-cli itself is installed.
+
+**This is a workaround with an expiry date.** Once the distribution ships java
+`signal_cli_java_min_version` or later, set `signal_cli_install_java: false` and let the
+distribution package provide it - or drop `tasks/java.yml` together with its variables.
 
 ## Directory layout
 
@@ -65,6 +75,29 @@ All of it is written read only to `/etc/signal-cli/accounts/<number>/` and resto
 the state directory **only when that account is not there yet**, so a re-run never
 overwrites keys, sessions or databases rotated by the running daemon. signal-cli recreates
 whatever the snapshot does not contain.
+
+## Agent integration
+
+An agent talking to this daemon needs its endpoint and the account it serves, which are
+`signal_cli_http_host`, `signal_cli_http_port` and `signal_cli_account`. This role does not
+know about any agent - the composing playbook maps them, and has to include this role with
+`public: yes` so its variables are visible afterwards:
+
+```yaml
+      - ansible.builtin.include_role:
+          name: andreasbehnke.ai_agent.signal_cli
+          public: yes
+
+      - ansible.builtin.include_role:
+          name: andreasbehnke.ai_agent.hermes
+        vars:
+          hermes_managed_env:
+            SIGNAL_HTTP_URL: "http://{{ signal_cli_http_host }}:{{ signal_cli_http_port }}"
+            SIGNAL_ACCOUNT: "{{ signal_cli_account }}"
+```
+
+Access policy (who may talk to the agent) is not part of this role: it is a setting of the
+agent, not of the daemon.
 
 ## Tool: export_account.py
 
@@ -184,6 +217,10 @@ sudo systemctl start signal-cli
 | Variable | Default | Description |
 |---|---|---|
 | `signal_cli_version` | `0.14.6` | pinned signal-cli release to install |
+| `signal_cli_install_java` | `true` | install Temurin from the Adoptium repository, see above |
+| `signal_cli_java_version` | `"25"` | Temurin major version to install |
+| `signal_cli_java_packages_absent` | `[openjdk-21-jre-headless]` | older runtimes to remove |
+| `signal_cli_java_min_version` | `{{ signal_cli_java_version }}` | minimum major version asserted on `PATH` |
 | `signal_cli_install_dir` | `/opt` | where the release archive is unpacked |
 | `signal_cli_bin_link` | `/usr/local/bin/signal-cli` | symlink placed into `PATH` |
 | `signal_cli_java_min_version` | `25` | minimum java major version, asserted, not installed |

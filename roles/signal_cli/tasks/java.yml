@@ -1,0 +1,58 @@
+---
+
+ # WORKAROUND, remove once the distribution ships a recent enough java:
+ # signal-cli 0.14.x is compiled for java 25 (class file 69.0), while Ubuntu
+ # 24.04 LTS and Debian 12 top out at java 21. Until then the runtime comes from
+ # the Adoptium (Eclipse Temurin) repository. When the distribution offers
+ # java {{ signal_cli_java_min_version }}, set signal_cli_install_java to false
+ # and install the distribution package instead, or drop this task file.
+
+ - name: install the prerequisites of the adoptium repository
+   become: yes
+   ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: yes
+
+ - name: ensure the apt keyring directory exists
+   become: yes
+   ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+ - name: add the adoptium signing key
+   become: yes
+   ansible.builtin.get_url:
+    url: https://packages.adoptium.net/artifactory/api/gpg/key/public
+    dest: /etc/apt/keyrings/adoptium.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+ - name: add the adoptium repository
+   become: yes
+   ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb {{ ansible_distribution_release }} main"
+    filename: adoptium
+    state: present
+    update_cache: yes
+
+ - name: install the temurin java runtime
+   become: yes
+   ansible.builtin.apt:
+    name: "temurin-{{ signal_cli_java_version }}-jre"
+    state: present
+
+ # Without this /usr/bin/java (update-alternatives) can still resolve to the
+ # older runtime, which signal-cli's launcher and the unit pick up from PATH.
+ - name: remove the superseded java runtimes
+   become: yes
+   ansible.builtin.apt:
+    name: "{{ signal_cli_java_packages_absent }}"
+    state: absent
+   when: signal_cli_java_packages_absent | length > 0

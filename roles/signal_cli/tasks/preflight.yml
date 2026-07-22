@@ -21,7 +21,8 @@
       - signal_cli_java_check.rc == 0
     fail_msg: >-
       no java runtime found on PATH. signal-cli {{ signal_cli_version }} needs
-      java {{ signal_cli_java_min_version }} or later, install it before this role.
+      java {{ signal_cli_java_min_version }} or later. Either let this role install
+      it (signal_cli_install_java) or provide it beforehand.
 
  # java -version writes "openjdk version "25.0.1" ..." to stderr.
  - name: assert the java version is recent enough

@@ -1,0 +1,10 @@
+---
+
+ # Restarting an unconfigured agent is pointless: it would only crash loop.
+ - name: restart hermes
+   become: yes
+   ansible.builtin.systemd_service:
+    name: "{{ hermes_service_name }}"
+    state: restarted
+    daemon_reload: yes
+   when: hermes_state_config.stat.exists | default(false)

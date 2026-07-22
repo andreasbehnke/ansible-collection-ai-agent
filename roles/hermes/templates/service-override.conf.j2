@@ -6,6 +6,12 @@ User={{ hermes_user }}
 Group={{ hermes_group }}
 WorkingDirectory={{ hermes_home }}
 Environment=HERMES_HOME={{ hermes_home }}
+# The generated unit bakes in the environment of whoever ran the installer, so
+# HOME would point at that user's home - unreachable under ProtectHome and not
+# writable for the service. A later assignment of the same variable wins.
+Environment=HOME={{ hermes_home }}
+Environment=USER={{ hermes_user }}
+Environment=LOGNAME={{ hermes_user }}
 {% if hermes_config_dir != '/etc/hermes' %}
 Environment=HERMES_MANAGED_DIR={{ hermes_config_dir }}
 {% endif %}

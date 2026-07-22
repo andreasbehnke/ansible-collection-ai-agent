@@ -57,12 +57,3 @@
     creates: "{{ hermes_bin }}"
    register: hermes_install
 
- - name: own the state directory after the installation
-   become: yes
-   ansible.builtin.file:
-    path: "{{ hermes_home }}"
-    state: directory
-    owner: "{{ hermes_user }}"
-    group: "{{ hermes_group }}"
-    recurse: yes
-   when: hermes_install is changed

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+{{ ansible_managed | comment }}
+# Run the hermes CLI as the service user against its managed state, from any
+# account with sudo rights. {{ hermes_config_dir }} and {{ hermes_home }} are not
+# readable by other users, so the CLI has to run as {{ hermes_user }}.
+exec sudo -u {{ hermes_user }} HERMES_HOME={{ hermes_home }} {{ hermes_bin }} "$@"

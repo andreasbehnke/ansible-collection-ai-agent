@@ -36,24 +36,38 @@ Set `signal_cli_accounts` and store the two signal-cli account files in the pass
 store, verbatim, one entry each:
 
 ```
-<signal_cli_account_pass_prefix>/<number>/accounts.json   -> data/accounts.json
-<signal_cli_account_pass_prefix>/<number>/account.json    -> data/<path>
+<signal_cli_account_pass_prefix>/<number>/accounts.json     -> data/accounts.json
+<signal_cli_account_pass_prefix>/<number>/account.json      -> data/<path>
+<signal_cli_account_pass_prefix>/<number>/state.tar.gz.b64  -> data/<path>.d/   (optional)
 ```
 
-`<path>` is taken from the `accounts.json` entry of that number. Export them from a
-running instance with:
+`<path>` is taken from the `accounts.json` entry of that number. The account file holds
+the identity key, the registration password and the profile key - that is the account
+identity, so the number does not have to be registered again.
+
+`state.tar.gz.b64` is optional and holds the runtime state directory `<path>.d/` (the
+sqlite database with **groups**, contacts and sessions) as base64 encoded tar.gz. Without
+it signal-cli starts with an empty database: sending into a known group fails with
+`Group not found` until the group is learned again from an incoming message. Note that the
+snapshot ages - refresh it after relevant group or contact changes.
+
+Export everything from a running instance (stop the daemon first, so the sqlite database
+is consistent):
 
 ```bash
-pass insert -m private/network/signal/+49123456789/accounts.json  # paste data/accounts.json
-pass insert -m private/network/signal/+49123456789/account.json   # paste data/<path>
+N=+49123456789
+ssh admin@host 'sudo systemctl stop signal-cli'
+ssh admin@host 'sudo cat /var/lib/signal-cli/data/accounts.json' \
+  | pass insert -m private/network/signal/$N/accounts.json
+# <path> is the "path" field of that number's entry in accounts.json
+ssh admin@host 'sudo cat /var/lib/signal-cli/data/<path>' \
+  | pass insert -m private/network/signal/$N/account.json
+ssh admin@host 'sudo tar czf - -C /var/lib/signal-cli/data <path>.d | base64 -w0' \
+  | pass insert -m private/network/signal/$N/state.tar.gz.b64
+ssh admin@host 'sudo systemctl start signal-cli'
 ```
 
-The account file holds the identity key, the registration password and the profile key -
-that is the account identity, so the number does not have to be registered again. The
-sqlite database in `data/<path>.d/` is not restored: signal-cli recreates it and re-fetches
-group memberships and sessions from the server on first start.
-
-Both files are seeded into the state directory **only when the account is not there yet**,
+All of it is restored into the state directory **only when the account is not there yet**,
 so a re-run never overwrites keys rotated by the running daemon.
 
 ## Variables

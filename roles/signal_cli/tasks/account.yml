@@ -15,6 +15,14 @@
     signal_cli_account_json: "{{ lookup('community.general.passwordstore', signal_cli_account_pass_path ~ '/account.json', returnall=true) }}"
    no_log: true
 
+ # Optional: base64 encoded tar.gz of the runtime state directory <path>.d, which
+ # holds groups, contacts and sessions. Without it signal-cli starts with an empty
+ # database and only learns groups again from incoming messages.
+ - name: read the optional account state snapshot from the password store
+   ansible.builtin.set_fact:
+    signal_cli_account_state_snapshot: "{{ lookup('community.general.passwordstore', signal_cli_account_pass_path ~ '/state.tar.gz.b64', missing='empty', returnall=true) }}"
+   no_log: true
+
  # The registry entry names the data file of the account: data/<path> plus the
  # runtime directory data/<path>.d/.
  - name: determine the account data file name
@@ -47,6 +55,17 @@
     label: "{{ item.name }}"
    no_log: true
 
+ - name: install the read only account state snapshot
+   become: yes
+   ansible.builtin.copy:
+    content: "{{ signal_cli_account_state_snapshot }}"
+    dest: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account_item.number }}/state.tar.gz.b64"
+    owner: root
+    group: "{{ signal_cli_group }}"
+    mode: "0640"
+   when: signal_cli_account_state_snapshot | length > 0
+   no_log: true
+
  - name: check whether the account is already present in the state directory
    become: yes
    ansible.builtin.stat:
@@ -55,6 +74,31 @@
 
  # Seeded once only, so prekeys and sessions rotated by the running daemon are
  # never overwritten by the snapshot from the password store.
+ - name: unpack the account state snapshot into the state directory
+   become: yes
+   ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      base64 -d < {{ (signal_cli_config_dir ~ '/accounts/' ~ signal_cli_account_item.number ~ '/state.tar.gz.b64') | quote }} \
+        | tar xzf - -C {{ (signal_cli_data_dir ~ '/data') | quote }}
+    executable: /bin/bash
+   when:
+     - signal_cli_account_state_snapshot | length > 0
+     - not signal_cli_account_state.stat.exists
+   notify: restart signal-cli
+
+ - name: own the restored account state
+   become: yes
+   ansible.builtin.file:
+    path: "{{ signal_cli_data_dir }}/data/{{ signal_cli_account_entry.path }}.d"
+    state: directory
+    owner: "{{ signal_cli_user }}"
+    group: "{{ signal_cli_group }}"
+    recurse: yes
+   when:
+     - signal_cli_account_state_snapshot | length > 0
+     - not signal_cli_account_state.stat.exists
+
  - name: seed the account into the state directory
    become: yes
    ansible.builtin.copy:

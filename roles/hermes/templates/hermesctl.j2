@@ -3,4 +3,9 @@
 # Run the hermes CLI as the service user against its managed state, from any
 # account with sudo rights. {{ hermes_config_dir }} and {{ hermes_home }} are not
 # readable by other users, so the CLI has to run as {{ hermes_user }}.
-exec sudo -u {{ hermes_user }} HERMES_HOME={{ hermes_home }} {{ hermes_bin }} "$@"
+#
+# cd into HERMES_HOME first (as {{ hermes_user }}, which can access it): the agent
+# uses the current directory as its terminal working dir, and the caller's home is
+# not readable by {{ hermes_user }} — chatting from it fails with EACCES on .git.
+exec sudo -u {{ hermes_user }} HERMES_HOME={{ hermes_home }} \
+  /bin/sh -c 'cd "$HERMES_HOME" && exec "$0" "$@"' {{ hermes_bin }} "$@"

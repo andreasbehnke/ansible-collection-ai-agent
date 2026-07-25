@@ -38,6 +38,29 @@ sudo hermesctl config
 sudo hermesctl doctor
 ```
 
+## Relationship to the upstream installer
+
+This role does not use a bespoke installation. It runs the upstream **root-mode installer**
+([What the Installer Does](https://hermes-agent.nousresearch.com/docs/getting-started/installation#what-the-installer-does))
+exactly as documented, and applies upstream's own recommended `HERMES_HOME` override to move
+the agent's data off the root-owned `/root/.hermes` onto an FHS-correct, service-owned state
+directory. The unprivileged service user, the systemd unit and the hardening drop-in are
+layered on top of that sanctioned install.
+
+The upstream [non-sudo / system service user install](https://hermes-agent.nousresearch.com/docs/getting-started/installation#non-sudo--system-service-user-installs)
+is deliberately **not** used: it installs the code into the service user's own home
+(`~/.hermes`, agent-writable) for hosts without root. We have root (ansible `become`), and
+keeping the code root-owned in `/usr/local` is what makes it immutable to the sandboxed agent.
+
+| | Root-mode default | Our role |
+|---|---|---|
+| Code | `/usr/local/lib/hermes-agent` | same |
+| Binary | `/usr/local/bin/hermes` | same |
+| Data (`HERMES_HOME`) | `/root/.hermes` (root-owned) | `/var/lib/hermes`, `hermes`-owned, via the documented `HERMES_HOME` override |
+| Runs as | `root` | dedicated unprivileged `hermes` |
+| Systemd service | none | `hermes gateway install --system --run-as-user hermes` + hardening drop-in |
+| Configuration policy | none | managed scope `/etc/hermes`, read-only to the service |
+
 ## Running the CLI: `hermesctl`
 
 Because `/etc/hermes` and `/var/lib/hermes` are not readable by other users, running `hermes`

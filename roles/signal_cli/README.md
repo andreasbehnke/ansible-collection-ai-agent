@@ -76,6 +76,40 @@ the state directory **only when that account is not there yet**, so a re-run nev
 overwrites keys, sessions or databases rotated by the running daemon. signal-cli recreates
 whatever the snapshot does not contain.
 
+## Profile
+
+`signal_cli_profile` sets the **public** Signal profile of `signal_cli_account` - the display
+name, the "about" text and emoji, and the avatar other users see. It is optional; empty (the
+default) leaves the profile untouched, and only the keys you set are changed:
+
+```yaml
+signal_cli_profile:
+  given_name: "Hermes"
+  family_name: ""
+  about: "AI assistant"
+  about_emoji: "🤖"
+  avatar_src: "files/hermes-avatar.jpg"   # a file on the ansible controller
+  remove_avatar: false
+```
+
+The profile is applied through the daemon's `updateProfile` JSON-RPC method, **not** a second
+`signal-cli` process: the daemon holds the account's exclusive lock, so a parallel CLI
+invocation would fail. The role therefore runs it after the service is up, waits for
+`/api/v1/check`, and posts to `/api/v1/rpc`.
+
+The **avatar is a binary image file** you provide via `avatar_src` (ship it in the private
+repo - it is site specific but not a secret). signal-cli's `updateProfile` takes the avatar as
+a **file path**, so the role only copies the image read only to
+`/etc/signal-cli/accounts/<number>/avatar` and hands signal-cli that path - there is no base64
+encoding. (The base64 avatar you may have seen belongs to the separate *signal-cli-rest-api*
+wrapper, not to signal-cli's own daemon used here.)
+
+Applying a profile is idempotent: the role records a stamp of the profile fields plus the
+avatar's checksum in `/var/lib/signal-cli/.profile-stamp` and only calls `updateProfile` when
+it changes, so re-runs are no-ops while an edited field or a replaced image re-applies. A
+profile is only set once an account exists; on a fresh machine it is applied on the run after
+the account has been registered or restored.
+
 ## Agent integration
 
 An agent talking to this daemon needs its endpoint and the account it serves, which are
@@ -236,6 +270,7 @@ sudo systemctl start signal-cli
 | `signal_cli_account` | `""` | E.164 number the daemon serves; may stay empty if exactly one account exists in the state directory |
 | `signal_cli_accounts` | `[]` | existing accounts to reproduce, entries `{number: "+49...", pass_path: "<optional>"}`; empty means a fresh install |
 | `signal_cli_account_pass_prefix` | `private/network/signal` | password store prefix, `pass_path` defaults to `<prefix>/<number>` |
+| `signal_cli_profile` | `{}` | public profile of `signal_cli_account`, keys `given_name`, `family_name`, `about`, `about_emoji`, `avatar_src` (image file), `remove_avatar`; empty leaves the profile untouched |
 
 ## Example
 
@@ -250,4 +285,9 @@ sudo systemctl start signal-cli
         signal_cli_account: "+49123456789"
         signal_cli_accounts:
           - number: "+49123456789"
+        signal_cli_profile:
+          given_name: "Hermes"
+          about: "AI assistant"
+          about_emoji: "🤖"
+          avatar_src: "files/hermes-avatar.jpg"
 ```

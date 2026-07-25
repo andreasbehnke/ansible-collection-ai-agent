@@ -49,3 +49,19 @@
   # Password store location holding <pass_path>/accounts.json and
   # <pass_path>/account.json for each account, defaults to <prefix>/<number>.
   signal_cli_account_pass_prefix: "private/network/signal"
+
+  # ---- profile ----
+  # Public Signal profile of signal_cli_account, applied through the daemon's
+  # updateProfile RPC. Empty means the profile is left untouched. Only the keys
+  # you set are changed. avatar_src is a path to a binary image file on the
+  # ansible controller (ship it in the private repo); it is site specific but not
+  # a secret. signal-cli's updateProfile takes the avatar as a file path, so no
+  # base64 encoding is needed.
+  #   signal_cli_profile:
+  #     given_name: "Hermes"
+  #     family_name: ""
+  #     about: "AI assistant"
+  #     about_emoji: "🤖"
+  #     avatar_src: "files/hermes-avatar.jpg"
+  #     remove_avatar: false
+  signal_cli_profile: {}

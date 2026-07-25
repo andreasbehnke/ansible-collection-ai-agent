@@ -1,0 +1,131 @@
+---
+
+ # Sets the public Signal profile (name, about, avatar) of the served account.
+ # signal-cli holds the account lock in the daemon, so a second CLI process
+ # cannot touch the account - the profile is set through the daemon's JSON-RPC
+ # updateProfile method instead. The avatar is passed as a file path (signal-cli
+ # reads the image itself), so no base64 is involved.
+
+ - name: require an account for the profile
+   ansible.builtin.assert:
+    that:
+      - signal_cli_account | length > 0
+    fail_msg: >-
+      signal_cli_profile is set but signal_cli_account is empty. The profile is
+      applied to the served account, so signal_cli_account has to name it.
+
+ - name: report a profile without an account
+   ansible.builtin.debug:
+    msg: >-
+      No signal account yet, {{ signal_cli_service_name }} is not serving. The
+      profile is applied on the next run, once an account has been restored or
+      registered.
+   when: not (signal_cli_registry_state.stat.exists | default(false))
+
+ - name: apply the signal profile
+   when: signal_cli_registry_state.stat.exists | default(false)
+   block:
+
+     # The account directory already exists for restored accounts (account.yml);
+     # a manually registered account has none, so it is ensured here too.
+     - name: create the read only account directory
+       become: yes
+       ansible.builtin.file:
+        path: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account }}"
+        state: directory
+        owner: root
+        group: "{{ signal_cli_group }}"
+        mode: "0750"
+       when: signal_cli_profile.avatar_src is defined
+
+     # Master copy of the avatar, read only for the service. signal-cli copies it
+     # into its own state and uploads it when updateProfile runs. copy handles
+     # binary content and reports the checksum used for the idempotence stamp.
+     - name: install the profile avatar
+       become: yes
+       ansible.builtin.copy:
+        src: "{{ signal_cli_profile.avatar_src }}"
+        dest: "{{ signal_cli_config_dir }}/accounts/{{ signal_cli_account }}/avatar"
+        owner: root
+        group: "{{ signal_cli_group }}"
+        mode: "0640"
+       register: signal_cli_avatar
+       when: signal_cli_profile.avatar_src is defined
+
+     # Only the keys that are set are sent; omitted fields are left unchanged.
+     - name: assemble the updateProfile parameters
+       ansible.builtin.set_fact:
+        signal_cli_profile_rpc: >-
+          {{
+            {'account': signal_cli_account}
+            | combine({'givenName': signal_cli_profile.given_name} if signal_cli_profile.given_name is defined else {})
+            | combine({'familyName': signal_cli_profile.family_name} if signal_cli_profile.family_name is defined else {})
+            | combine({'about': signal_cli_profile.about} if signal_cli_profile.about is defined else {})
+            | combine({'aboutEmoji': signal_cli_profile.about_emoji} if signal_cli_profile.about_emoji is defined else {})
+            | combine({'avatar': signal_cli_config_dir ~ '/accounts/' ~ signal_cli_account ~ '/avatar'} if (signal_cli_profile.avatar_src is defined and not signal_cli_profile.remove_avatar | default(false)) else {})
+            | combine({'removeAvatar': true} if signal_cli_profile.remove_avatar | default(false) else {})
+          }}
+
+     # The avatar is represented by its checksum, not its (constant) path, so a
+     # changed image is detected while an unchanged one stays a no-op.
+     - name: compute the profile stamp
+       ansible.builtin.set_fact:
+        signal_cli_profile_stamp: >-
+          {{ (signal_cli_profile_rpc
+              | combine({'avatar': signal_cli_avatar.checksum} if signal_cli_profile.avatar_src is defined else {}))
+             | to_json }}
+
+     - name: read the recorded profile stamp
+       become: yes
+       ansible.builtin.slurp:
+        src: "{{ signal_cli_data_dir }}/.profile-stamp"
+       register: signal_cli_profile_stamp_old
+       failed_when: false
+
+     - name: decide whether the profile has to be applied
+       ansible.builtin.set_fact:
+        signal_cli_profile_changed: >-
+          {{ signal_cli_profile_stamp_old.content is not defined
+             or (signal_cli_profile_stamp_old.content | b64decode) != signal_cli_profile_stamp }}
+
+     # The daemon may still be starting or restarting (fresh account, changed
+     # config); wait until it answers the health endpoint before talking to it.
+     - name: wait for the signal-cli daemon to be ready
+       ansible.builtin.uri:
+        url: "http://{{ signal_cli_http_host }}:{{ signal_cli_http_port }}/api/v1/check"
+        status_code: 200
+       register: signal_cli_health
+       until: signal_cli_health.status == 200
+       retries: 10
+       delay: 3
+       when: signal_cli_profile_changed
+
+     # A JSON-RPC error is reported as {"error": ...} with HTTP 200, so the status
+     # code alone is not enough to tell success from failure.
+     - name: apply the signal profile
+       ansible.builtin.uri:
+        url: "http://{{ signal_cli_http_host }}:{{ signal_cli_http_port }}/api/v1/rpc"
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: updateProfile
+          method: updateProfile
+          params: "{{ signal_cli_profile_rpc }}"
+        status_code: 200
+       register: signal_cli_profile_result
+       failed_when: >-
+         signal_cli_profile_result.status != 200
+         or 'error' in (signal_cli_profile_result.json | default({}))
+       changed_when: true
+       when: signal_cli_profile_changed
+
+     - name: record the applied profile stamp
+       become: yes
+       ansible.builtin.copy:
+        content: "{{ signal_cli_profile_stamp }}"
+        dest: "{{ signal_cli_data_dir }}/.profile-stamp"
+        owner: "{{ signal_cli_user }}"
+        group: "{{ signal_cli_group }}"
+        mode: "0600"
+       when: signal_cli_profile_changed

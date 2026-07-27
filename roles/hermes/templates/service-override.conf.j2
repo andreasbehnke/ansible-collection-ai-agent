@@ -27,3 +27,12 @@ ReadWritePaths={{ ([hermes_home] + hermes_service_read_write_paths) | join(' ') 
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 {% endif %}
+{% if hermes_media_reader_group %}
+
+# Outbound attachments are handed to the signal-cli daemon by path; it opens
+# them as its own user. Relax the umask from the default so files Hermes writes
+# into the setgid media dirs are group readable (0640), letting the reader group
+# {{ hermes_media_reader_group }} read them. Files outside those dirs stay group
+# hermes (single member), so this does not widen their exposure.
+UMask=0027
+{% endif %}

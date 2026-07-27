@@ -45,3 +45,47 @@
   # Additional writable paths for the agent, it can only write to its state
   # directory otherwise.
   hermes_service_read_write_paths: []
+
+  # ---- outbound media handoff ----
+  # Hermes sends attachments by handing the chat daemon the PATH of a file it
+  # wrote; the daemon opens that path as its own service user, so the file has to
+  # be readable by it. Set this to that service user's group to make the media
+  # dirs below group readable: they become setgid to this group and the service
+  # umask is relaxed to 0027, so new files are 0640 hermes:<group>. Empty keeps
+  # the strict default (off); everything outside these dirs stays group hermes.
+  #
+  # Only dirs Hermes does NOT manage can be shared. Hermes re-asserts 0700 on its
+  # own home and cache trees (image_cache, audio_cache, ...) at startup and on
+  # reconnect - upstream bug #10757, no opt-out - so those cannot be opened up and
+  # its auto-cached images cannot be delivered to a separate daemon. Use an
+  # operator-owned "outbox" the agent writes into and references (MEDIA:), and
+  # allow it in the managed HERMES_MEDIA_ALLOW_DIRS.
+  #
+  # HERMES_HOME itself stays 0700, so the reader cannot traverse into the outbox
+  # by path - it gets a scoped read-only view in its own mount namespace instead.
+  # For the signal_cli role that is signal_cli_foreign_read_mounts, wired in the
+  # composing playbook.
+  hermes_media_reader_group: ""
+  # Media directories under HERMES_HOME shared with hermes_media_reader_group.
+  # Keep to operator-owned dirs (default: outbox) - Hermes' own cache trees are
+  # force-locked to 0700 and cannot be shared (see above).
+  hermes_media_dirs:
+    - outbox
+  # Systemd services to restart once the media dirs exist, so a reader service
+  # that mounts them read only picks them up. Empty means none; the composing
+  # playbook names the chat daemon here (it usually starts before this role runs,
+  # when the dirs do not exist yet).
+  hermes_media_notify_restart: []
+
+  # ---- agent context files ----
+  # Files written into HERMES_HOME that Hermes injects into the agent's system
+  # prompt: AGENTS.md carries standing operational instructions, SOUL.md the
+  # agent's identity (both are read only from HERMES_HOME). Map of filename to
+  # content. The agent can edit them, the role re-asserts them every run. Empty
+  # means none. Use AGENTS.md for instructions - it is additive and does not
+  # replace the persona. Example (steer attachments to the shared outbox):
+  #   hermes_context_files:
+  #     AGENTS.md: |
+  #       When you send a file as an attachment, write it under
+  #       /var/lib/hermes/outbox/ and reference it there.
+  hermes_context_files: {}

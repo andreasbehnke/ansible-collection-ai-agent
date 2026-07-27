@@ -1,0 +1,19 @@
+---
+
+ # Writes the operator's context files into HERMES_HOME. Hermes injects these
+ # into the agent's system prompt (AGENTS.md for standing instructions, SOUL.md
+ # for identity), read only from HERMES_HOME. Owned by the service user so the
+ # agent can read them; re-asserted every run, so an edit by the agent is
+ # restored. A change notifies a restart to reload the prompt.
+ - name: install the agent context files
+   become: yes
+   ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "{{ hermes_home }}/{{ item.key }}"
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_group }}"
+    mode: "0640"
+   loop: "{{ hermes_context_files | dict2items }}"
+   loop_control:
+    label: "{{ item.key }}"
+   notify: restart hermes

@@ -65,3 +65,20 @@
   #     avatar_src: "files/hermes-avatar.jpg"
   #     remove_avatar: false
   signal_cli_profile: {}
+
+  # ---- foreign read-only mounts ----
+  # Directories owned by another service that the daemon must READ but whose
+  # parent it cannot traverse (that service keeps its state dir 0700). signal-cli
+  # is sent attachment file paths and opens them itself, so when it delivers an
+  # agent's outbound media the file lives under the agent's private state dir.
+  # Each entry replaces "overlay" with an empty traversable tmpfs in signal-cli's
+  # OWN mount namespace, then bind-mounts "paths" back into it read only - so the
+  # daemon reaches exactly those dirs by their real path while the rest of the
+  # foreign state dir stays hidden. The foreign process is unaffected. Empty
+  # means none. Files still have to be readable by the signal user (group/other).
+  #   signal_cli_foreign_read_mounts:
+  #     - overlay: /var/lib/hermes
+  #       paths:
+  #         - /var/lib/hermes/cache
+  #         - /var/lib/hermes/outbox
+  signal_cli_foreign_read_mounts: []

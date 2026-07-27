@@ -4,3 +4,9 @@
  - include_tasks: install.yml
  - include_tasks: config.yml
  - include_tasks: service.yml
+ - include_tasks: context.yml
+   when: hermes_context_files | length > 0
+ # Runs last: service.yml re-owns the whole state directory to hermes:hermes,
+ # so the media dirs are re-grouped to the reader group only afterwards.
+ - include_tasks: media.yml
+   when: hermes_media_reader_group | length > 0

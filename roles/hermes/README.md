@@ -130,6 +130,78 @@ named after the Hermes key they carry: `hermes_signal_allowed_users` for
 `SIGNAL_ALLOWED_USERS`. Secrets never travel through this wiring, they go through
 `hermes_managed_env_secrets` and stay in the password store until the template is rendered.
 
+## Sending media (outbound attachments)
+
+Hermes delivers an image or file by **handing the messaging daemon the path of a file it
+wrote**, then the daemon opens that path itself, as **its own** service user. When the chat tool
+runs as a separate hardened service - as `andreasbehnke.ai_agent.signal_cli` does (user
+`signal`) - it cannot read a file under `HERMES_HOME`, which the gateway keeps at `0700`. So
+attachments silently fail to send.
+
+**What can and cannot be shared.** Hermes **re-asserts `0700` on its own home and cache trees**
+(`image_cache`, `audio_cache`, …) at startup and on reconnect - upstream bug
+[#10757](https://github.com/NousResearch/hermes-agent/issues/10757), with no opt-out - and a bind
+mount cannot loosen those perms. So Hermes' **auto-cached images cannot be delivered** to a
+separate daemon (short of granting it `CAP_DAC_READ_SEARCH`, which this role does not do). What
+*does* work is an **operator-owned `outbox`** that Hermes does not manage: the agent writes a file
+there, references it with `MEDIA:/var/lib/hermes/outbox/<name>`, and the daemon reads it.
+
+- Set `hermes_media_reader_group` to the daemon's group. The dirs in `hermes_media_dirs` (default
+  `outbox`) are created `hermes:<group>` mode `2750` (**setgid**, files inherit the group), and
+  the service umask is relaxed to `0027`, so files are `0640` - readable by the group. Everything
+  outside these dirs stays group `hermes` (sole member `hermes`), so config, `.env`, memories and
+  sessions remain private.
+- Because `HERMES_HOME` stays `0700`, the reader does **not** traverse the home. It exposes the
+  outbox in its own mount namespace instead: the `signal_cli` role does this with
+  `signal_cli_foreign_read_mounts` (an empty tmpfs over `HERMES_HOME` plus a read-only bind of the
+  outbox), so the daemon reads it by the real path while the rest of the home stays hidden.
+- `hermes_media_notify_restart` names the reader services to restart once the outbox exists, so
+  they pick up the bind (the daemon usually starts before this role creates it).
+
+Wire it from the composing playbook (the daemon's group and service name come from the producing
+role, included `public: yes`), and allow the outbox in Hermes' own delivery allowlist:
+
+```yaml
+      - name: Install signal-cli and its daemon
+        ansible.builtin.include_role:
+          name: andreasbehnke.ai_agent.signal_cli
+          public: yes
+        vars:
+          signal_cli_foreign_read_mounts:
+            - overlay: /var/lib/hermes
+              paths: [/var/lib/hermes/outbox]
+
+      - name: Install the Hermes agent and its gateway
+        ansible.builtin.include_role:
+          name: andreasbehnke.ai_agent.hermes
+        vars:
+          hermes_media_reader_group: "{{ signal_cli_group }}"
+          hermes_media_notify_restart: ["{{ signal_cli_service_name }}"]
+          hermes_managed_env:
+            # …other keys…
+            # let the agent deliver files it drops into the outbox
+            HERMES_MEDIA_ALLOW_DIRS: "{{ hermes_home }}/outbox"
+```
+
+Notes:
+
+- **Steer the agent.** Add a standing instruction so the agent writes any file it sends under
+  `/var/lib/hermes/outbox/` and references it there - not `/tmp` (outside the allowlist and, under
+  `PrivateTmp`, invisible to the other service) and not left in Hermes' own cache (see above). Use
+  `hermes_context_files` to drop an `AGENTS.md` into `HERMES_HOME`, which Hermes injects into the
+  agent's system prompt:
+
+  ```yaml
+          hermes_context_files:
+            AGENTS.md: |
+              When you send a file as a Signal attachment, place it under
+              /var/lib/hermes/outbox/ and reference it there. Files elsewhere
+              (/tmp, Hermes' image_cache) cannot be read by the Signal service.
+  ```
+
+  This is soft (the model has to follow it), which is the trade-off for keeping full service
+  isolation.
+
 ## Variables
 
 | Variable | Default | Description |
@@ -148,6 +220,10 @@ named after the Hermes key they carry: `hermes_signal_allowed_users` for
 | `hermes_managed_env_secrets` | `{}` | secret values of the managed `.env`: variable name to password store entry |
 | `hermes_service_hardening` | `true` | write the sandbox directives into the drop-in |
 | `hermes_service_read_write_paths` | `[]` | additional writable paths for the agent |
+| `hermes_media_reader_group` | `""` | group allowed to read the outbound media dirs (the chat daemon's service group); empty disables media sharing |
+| `hermes_media_dirs` | `[cache, cache/images, cache/audio, cache/documents, outbox]` | media dirs under `HERMES_HOME` shared with that group (setgid, `0640` files) |
+| `hermes_media_notify_restart` | `[]` | systemd services to restart once the media dirs exist, so a reader that mounts them read-only picks them up |
+| `hermes_context_files` | `{}` | files (name → content) written into `HERMES_HOME` and injected into the agent's system prompt (`AGENTS.md` for instructions, `SOUL.md` for identity) |
 
 ## Example
 

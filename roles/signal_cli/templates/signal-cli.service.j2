@@ -25,6 +25,17 @@ ReadWritePaths={{ signal_cli_data_dir }}
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+{% for mount in signal_cli_foreign_read_mounts %}
+
+# Read only view of {{ mount.overlay }}: an empty tmpfs hides it, then only the
+# listed dirs are bound back in, so the daemon reads exactly those by their real
+# path. The "-" makes a still missing source non-fatal (it is created later on a
+# first install); this unit is restarted once it exists.
+TemporaryFileSystem={{ mount.overlay }}
+{% for path in mount.paths %}
+BindReadOnlyPaths=-{{ path }}
+{% endfor %}
+{% endfor %}
 
 [Install]
 WantedBy=multi-user.target

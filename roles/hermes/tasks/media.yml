@@ -1,0 +1,44 @@
+---
+
+ # Makes Hermes' outbound media files readable by the reader group. Hermes hands
+ # the chat daemon the PATH of the file to send; the daemon opens it as its own
+ # service user, so the file (written hermes:hermes, group unreadable) is out of
+ # reach. The dirs below are made setgid to hermes_media_reader_group and the
+ # service umask is relaxed (service-override.conf.j2) so new files are 0640
+ # hermes:<group>. Only these dirs are shared - the rest of HERMES_HOME stays
+ # group hermes and thus private, so no secrets or state leak to the reader.
+ #
+ # HERMES_HOME itself stays 0700 and untraversable by the reader: the gateway
+ # re-asserts that mode at runtime, so it cannot be loosened. The reading service
+ # instead gets a scoped read-only view of these dirs in its own mount namespace
+ # (see the signal_cli role's signal_cli_foreign_read_mounts). This role only has
+ # to make the FILES group readable.
+
+ # Owned by the reader group and setgid, so files Hermes writes here inherit the
+ # group and (with the relaxed umask) are group readable. Created before Hermes
+ # first writes; it reuses existing dirs, so these permissions stick. Notifies a
+ # restart of the reader services so they (re)establish their bind mounts once
+ # the dirs exist - the reader daemon usually starts before this role runs.
+ - name: create the shared media directories
+   become: yes
+   ansible.builtin.file:
+    path: "{{ hermes_home }}/{{ item }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_media_reader_group }}"
+    mode: "2750"
+   loop: "{{ hermes_media_dirs }}"
+   notify: restart media reader services
+
+ # service.yml re-owns the whole state tree to hermes:hermes on every run, so
+ # existing media files are re-grouped to the reader here (mode left to the
+ # umask). Files written before the umask was relaxed stay 0600 and are not
+ # readable until the cache regenerates them; new ones are 0640.
+ - name: re-group existing files in the shared media directories
+   become: yes
+   ansible.builtin.file:
+    path: "{{ hermes_home }}/{{ item }}"
+    state: directory
+    group: "{{ hermes_media_reader_group }}"
+    recurse: yes
+   loop: "{{ hermes_media_dirs }}"

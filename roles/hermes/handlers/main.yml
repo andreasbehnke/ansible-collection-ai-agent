@@ -8,3 +8,13 @@
     state: restarted
     daemon_reload: yes
    when: hermes_state_config.stat.exists | default(false)
+
+ # A reader service (e.g. the chat daemon) exposes the media dirs read only in
+ # its own mount namespace; it has to restart to pick them up once they exist.
+ # The role does not know these services, the composing playbook names them.
+ - name: restart media reader services
+   become: yes
+   ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: restarted
+   loop: "{{ hermes_media_notify_restart }}"

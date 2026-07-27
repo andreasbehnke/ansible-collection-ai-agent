@@ -133,6 +133,40 @@ know about any agent - the composing playbook maps them, and has to include this
 Access policy (who may talk to the agent) is not part of this role: it is a setting of the
 agent, not of the daemon.
 
+## Reading an agent's outbound media
+
+When an agent sends an **image or file**, it hands the daemon the *path* of a file it wrote and
+the daemon opens that path itself, as the `signal` user. If the agent keeps that file under a
+private state directory that `signal` cannot traverse - the Hermes gateway keeps its
+`HERMES_HOME` at `0700` and re-asserts it at runtime - the daemon cannot read it and the
+attachment silently fails.
+
+`signal_cli_foreign_read_mounts` gives the daemon a scoped **read-only view** of just those
+directories in its **own** mount namespace, without loosening the foreign state directory. Each
+entry overlays `overlay` with an empty `tmpfs` (hiding everything under it) and then bind-mounts
+`paths` back in read only, so the daemon reaches exactly those dirs by their real path:
+
+```yaml
+      - ansible.builtin.include_role:
+          name: andreasbehnke.ai_agent.signal_cli
+          public: yes
+        vars:
+          signal_cli_foreign_read_mounts:
+            - overlay: /var/lib/hermes
+              paths: [/var/lib/hermes/outbox]
+```
+
+The files must still be readable by the `signal` user (group or other). The producing role
+arranges that - the `hermes` role makes the shared dir setgid to `signal_cli_group` and relaxes
+its umask, see its `hermes_media_reader_group`. The bind source is created by that role, so a
+missing source is tolerated (`-` prefix) and the unit is restarted once it exists
+(`hermes_media_notify_restart`).
+
+Only share dirs the foreign service does **not** relock: Hermes keeps its own `HERMES_HOME` and
+image/audio caches at `0700` and re-asserts it
+([#10757](https://github.com/NousResearch/hermes-agent/issues/10757)), so bind an operator-owned
+`outbox` the agent writes into, not the caches.
+
 ## Tool: export_account.py
 
 [`tools/signal_cli/export_account.py`](../../tools/signal_cli/export_account.py) writes the
@@ -271,6 +305,7 @@ sudo systemctl start signal-cli
 | `signal_cli_accounts` | `[]` | existing accounts to reproduce, entries `{number: "+49...", pass_path: "<optional>"}`; empty means a fresh install |
 | `signal_cli_account_pass_prefix` | `private/network/signal` | password store prefix, `pass_path` defaults to `<prefix>/<number>` |
 | `signal_cli_profile` | `{}` | public profile of `signal_cli_account`, keys `given_name`, `family_name`, `about`, `about_emoji`, `avatar_src` (image file), `remove_avatar`; empty leaves the profile untouched |
+| `signal_cli_foreign_read_mounts` | `[]` | read-only namespace views of a foreign service's dirs the daemon must read (outbound media), entries `{overlay: <dir>, paths: [<dir>, …]}`; empty means none |
 
 ## Example
 

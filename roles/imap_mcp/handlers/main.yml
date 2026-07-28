@@ -1,0 +1,10 @@
+---
+
+ # Restarting without an account is pointless: the server has nothing to serve.
+ - name: restart imap-mcp
+   become: yes
+   ansible.builtin.systemd_service:
+    name: "{{ imap_mcp_service_name }}"
+    state: restarted
+    daemon_reload: yes
+   when: imap_mcp_account_state.stat.exists | default(false)

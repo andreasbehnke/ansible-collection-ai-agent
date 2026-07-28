@@ -1,0 +1,8 @@
+---
+
+ - include_tasks: node.yml
+   when: imap_mcp_install_node
+ - include_tasks: preflight.yml
+ - include_tasks: install.yml
+ - include_tasks: accounts.yml
+ - include_tasks: service.yml

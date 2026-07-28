@@ -1,0 +1,71 @@
+---
+
+  # ---- imap-mcp-server release ----
+  # nikolausm/imap-mcp-server, a stdio MCP server exposing IMAP as tools. Pinned
+  # to a git tag instead of "latest" so provisioning is reproducible. The code is
+  # cloned and built as root and left root owned, so neither the agent nor the
+  # service user can modify the executables (see README).
+  imap_mcp_repo: "https://github.com/nikolausm/imap-mcp-server.git"
+  imap_mcp_version: "v1.5.2"
+  imap_mcp_code_dir: /usr/local/lib/imap-mcp-server
+
+  # ---- stdio -> HTTP bridge ----
+  # imap-mcp-server speaks stdio only. mcp-proxy wraps it and serves a loopback
+  # streamable-HTTP endpoint the Hermes MCP client connects to. Chosen over
+  # supergateway because it binds 127.0.0.1 (supergateway only binds 0.0.0.0).
+  # Installed into a root owned venv, so it is immutable like the code. Pinned.
+  imap_mcp_proxy_version: "0.12.0"
+  imap_mcp_proxy_dir: /usr/local/lib/mcp-proxy
+  # Streamable-HTTP endpoint path mcp-proxy serves in --stateless mode; the Hermes
+  # mcp_servers url is http://{{ imap_mcp_http_host }}:{{ imap_mcp_port }}{{ path }}
+  imap_mcp_proxy_path: "/mcp"
+
+  # ---- node runtime ----
+  # imap-mcp-server and supergateway need node. Installed from the NodeSource
+  # repository (Ubuntu ships an older node). Set to false once the distribution
+  # offers imap_mcp_node_version, the role then only verifies it.
+  imap_mcp_install_node: true
+  imap_mcp_node_version: "20"
+
+  # ---- service identity ----
+  imap_mcp_user: imap-mcp
+  imap_mcp_group: imap-mcp
+  imap_mcp_service_name: imap-mcp
+  # Writable state directory and HOME of the service. Holds ~/.imap-mcp with the
+  # AES-encrypted accounts.json and its .key - the mailbox credentials. Owned by
+  # the service user, unreadable to the agent.
+  imap_mcp_home: /var/lib/imap-mcp
+
+  # ---- MCP endpoint ----
+  # The bridge has no authentication, it must stay on the loopback interface.
+  imap_mcp_http_host: "127.0.0.1"
+  imap_mcp_port: 9000
+
+  # ---- tool policy (server side allowlist) ----
+  # Only these tools are registered, enforced by imap-mcp-server itself through
+  # IMAP_MCP_ENABLED_TOOLS. The set is read-only plus imap_save_draft: no send, no
+  # delete, no move, no flag changes, no account management. The agent cannot call
+  # anything outside this list even if it asks.
+  imap_mcp_enabled_tools:
+    - imap_list_folders
+    - imap_folder_status
+    - imap_get_unread_count
+    - imap_search_emails
+    - imap_get_email
+    - imap_get_latest_emails
+    - imap_find_thread_messages
+    - imap_find_email_by_message_id
+    - imap_download_attachment
+    - imap_save_draft
+
+  # ---- account ----
+  # Mailbox account to restore from the password store. imap-mcp-server keeps its
+  # accounts AES-encrypted in ~/.imap-mcp/accounts.json with the key in
+  # ~/.imap-mcp/.key; both are produced once by the setup wizard and stored in
+  # pass (see README / doc/imap-mcp). Empty means a fresh install: the service is
+  # installed and enabled but not started until an account has been set up.
+  #   imap_mcp_account: "agent@example.com"
+  imap_mcp_account: ""
+  # Password store location holding <account>/accounts.json and <account>/key,
+  # defaults to <prefix>/<account>.
+  imap_mcp_account_pass_prefix: "private/network/imap"

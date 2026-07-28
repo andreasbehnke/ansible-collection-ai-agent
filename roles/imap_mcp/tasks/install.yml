@@ -1,0 +1,97 @@
+---
+
+ - name: create the imap-mcp group
+   become: yes
+   ansible.builtin.group:
+    name: "{{ imap_mcp_group }}"
+    system: yes
+
+ # Unprivileged service account without login shell. Its home is the state
+ # directory, so the credentials the server writes there stay off the agent.
+ - name: create the imap-mcp service user
+   become: yes
+   ansible.builtin.user:
+    name: "{{ imap_mcp_user }}"
+    group: "{{ imap_mcp_group }}"
+    home: "{{ imap_mcp_home }}"
+    create_home: no
+    shell: /usr/sbin/nologin
+    system: yes
+
+ - name: create the state directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ imap_mcp_home }}"
+    state: directory
+    owner: "{{ imap_mcp_user }}"
+    group: "{{ imap_mcp_group }}"
+    mode: "0700"
+
+ # ---- immutable code -------------------------------------------------------
+ # Cloned and built as root and left root owned: the service user only executes
+ # it, the agent (a different user again) can neither read the credentials nor
+ # modify these executables.
+ - name: clone imap-mcp-server
+   become: yes
+   ansible.builtin.git:
+    repo: "{{ imap_mcp_repo }}"
+    dest: "{{ imap_mcp_code_dir }}"
+    version: "{{ imap_mcp_version }}"
+   register: imap_mcp_git
+
+ - name: check whether the build output exists
+   become: yes
+   ansible.builtin.stat:
+    path: "{{ imap_mcp_code_dir }}/dist/index.js"
+   register: imap_mcp_dist
+
+ - name: install dependencies and build imap-mcp-server
+   become: yes
+   ansible.builtin.shell:
+    cmd: "npm ci || npm install; npm run build"
+    chdir: "{{ imap_mcp_code_dir }}"
+   when: imap_mcp_git.changed or not imap_mcp_dist.stat.exists
+
+ # Enforce the immutability: root owns everything and neither group nor other
+ # may write. Runs every time so a stray writable file can never survive.
+ - name: make the code tree root owned
+   become: yes
+   ansible.builtin.file:
+    path: "{{ imap_mcp_code_dir }}"
+    owner: root
+    group: root
+    recurse: yes
+
+ - name: strip group and other write from the code tree
+   become: yes
+   ansible.builtin.command: "chmod -R go-w {{ imap_mcp_code_dir }}"
+   changed_when: false
+
+ # ---- stdio -> HTTP bridge -------------------------------------------------
+ # mcp-proxy lives in its own root owned venv, immutable like the code above.
+ - name: install the python venv package
+   become: yes
+   ansible.builtin.apt:
+    name: python3-venv
+    state: present
+
+ - name: create the mcp-proxy virtualenv
+   become: yes
+   ansible.builtin.command: "python3 -m venv {{ imap_mcp_proxy_dir }}"
+   args:
+    creates: "{{ imap_mcp_proxy_dir }}/bin/pip"
+
+ - name: install mcp-proxy into the virtualenv
+   become: yes
+   ansible.builtin.pip:
+    name: "mcp-proxy=={{ imap_mcp_proxy_version }}"
+    virtualenv: "{{ imap_mcp_proxy_dir }}"
+   notify: restart imap-mcp
+
+ - name: make the bridge root owned and not group or other writable
+   become: yes
+   ansible.builtin.file:
+    path: "{{ imap_mcp_proxy_dir }}"
+    owner: root
+    group: root
+    recurse: yes

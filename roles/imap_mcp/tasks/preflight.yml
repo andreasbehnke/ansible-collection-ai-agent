@@ -1,0 +1,36 @@
+---
+
+ - name: assert the MCP endpoint stays on the loopback interface
+   ansible.builtin.assert:
+    that:
+      - imap_mcp_http_host in ['127.0.0.1', '::1', 'localhost']
+    fail_msg: >-
+      imap_mcp_http_host is '{{ imap_mcp_http_host }}'. The MCP bridge has no
+      authentication and must not be reachable off host.
+
+ - name: read the node version
+   ansible.builtin.command: node --version
+   register: imap_mcp_node_check
+   changed_when: false
+   failed_when: false
+   check_mode: no
+
+ - name: assert a node runtime is installed
+   ansible.builtin.assert:
+    that:
+      - imap_mcp_node_check.rc == 0
+    fail_msg: >-
+      no node runtime found on PATH. imap-mcp-server and supergateway need node
+      {{ imap_mcp_node_version }} or later. Either let this role install it
+      (imap_mcp_install_node) or provide it beforehand.
+
+ # node --version prints "v20.19.0".
+ - name: assert the node version is recent enough
+   ansible.builtin.assert:
+    that:
+      - node_major | int >= imap_mcp_node_version | int
+    fail_msg: >-
+      node {{ node_major }} found, this role expects node
+      {{ imap_mcp_node_version }} or later.
+   vars:
+    node_major: "{{ imap_mcp_node_check.stdout | regex_search('v([0-9]+)', '\\1') | default(['0'], true) | first }}"

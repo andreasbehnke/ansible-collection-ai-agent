@@ -1,0 +1,36 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=imap-mcp read-only IMAP MCP server (streamable HTTP on {{ imap_mcp_http_host }}:{{ imap_mcp_port }})
+Documentation=https://github.com/nikolausm/imap-mcp-server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ imap_mcp_user }}
+Group={{ imap_mcp_group }}
+Environment=HOME={{ imap_mcp_home }}
+# Server side tool allowlist: the imap-mcp-server registers only these tools, so
+# the agent gets read access plus imap_save_draft and nothing else.
+Environment=IMAP_MCP_ENABLED_TOOLS={{ imap_mcp_enabled_tools | join(',') }}
+# mcp-proxy binds the loopback interface and bridges the stdio server to
+# streamable HTTP; --pass-environment hands the allowlist to the child.
+ExecStart={{ imap_mcp_proxy_dir }}/bin/mcp-proxy --host {{ imap_mcp_http_host }} --port {{ imap_mcp_port }} --stateless --pass-environment -- node {{ imap_mcp_code_dir }}/dist/index.js
+
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+# The code and the bridge are root owned and read only to the service; only the
+# state directory (the encrypted account store) is writable.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ imap_mcp_home }}
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

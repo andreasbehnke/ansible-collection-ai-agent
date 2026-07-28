@@ -1,0 +1,52 @@
+---
+
+ # Restores the mailbox account from the password store. imap-mcp-server keeps
+ # its accounts AES-encrypted in ~/.imap-mcp/accounts.json with the key in
+ # ~/.imap-mcp/.key. Both are produced once by the setup wizard and stored in
+ # pass verbatim (see tools/imap_mcp/export_account.py); secrets never touch this
+ # repository. Without imap_mcp_account this is a fresh install and nothing is
+ # restored - set the account up manually first (see README).
+
+ - name: restore the imap account from the password store
+   when: imap_mcp_account | length > 0
+   block:
+
+     - name: determine the password store path for {{ imap_mcp_account }}
+       ansible.builtin.set_fact:
+        imap_mcp_account_pass_path: "{{ imap_mcp_account_pass_prefix ~ '/' ~ imap_mcp_account }}"
+
+     - name: read the account files from the password store
+       ansible.builtin.set_fact:
+        imap_mcp_accounts_json: "{{ lookup('community.general.passwordstore', imap_mcp_account_pass_path ~ '/accounts.json', returnall=true) }}"
+        imap_mcp_account_key: "{{ lookup('community.general.passwordstore', imap_mcp_account_pass_path ~ '/key', returnall=true) }}"
+       no_log: true
+
+     - name: create the account directory
+       become: yes
+       ansible.builtin.file:
+        path: "{{ imap_mcp_home }}/.imap-mcp"
+        state: directory
+        owner: "{{ imap_mcp_user }}"
+        group: "{{ imap_mcp_group }}"
+        mode: "0700"
+
+     # Seeded once (force: no): the encryption key and the account store are never
+     # overwritten once present, so the running service stays the source of truth.
+     - name: install the account files
+       become: yes
+       ansible.builtin.copy:
+        content: "{{ item.content }}"
+        dest: "{{ imap_mcp_home }}/.imap-mcp/{{ item.name }}"
+        owner: "{{ imap_mcp_user }}"
+        group: "{{ imap_mcp_group }}"
+        mode: "0600"
+        force: no
+       loop:
+         - name: accounts.json
+           content: "{{ imap_mcp_accounts_json }}"
+         - name: .key
+           content: "{{ imap_mcp_account_key }}"
+       loop_control:
+        label: "{{ item.name }}"
+       no_log: true
+       notify: restart imap-mcp

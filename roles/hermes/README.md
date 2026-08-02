@@ -213,6 +213,8 @@ Notes:
 | `hermes_bin` | `/usr/local/bin/hermes` | launcher path the installer creates |
 | `hermes_ctl_bin` | `/usr/local/bin/hermesctl` | operator wrapper running the CLI as the service user; `""` skips it |
 | `hermes_code_dir` | `/usr/local/lib/hermes-agent` | code path the installer creates |
+| `hermes_pip_extras` | `[]` | extra pip requirements installed into Hermes' venv for backends shipped as optional extras (e.g. `firecrawl-py==4.17.0` for the firecrawl `web_extract` backend); Hermes restarts when they change |
+| `hermes_uv_bin` / `hermes_venv_python` | `{{ hermes_home }}/bin/uv` / `{{ hermes_code_dir }}/venv/bin/python` | uv and the venv python used to install `hermes_pip_extras`; override only if the installer layout changes |
 | `hermes_config_dir` | `/etc/hermes` | managed scope; a different path is passed to the service as `HERMES_MANAGED_DIR` |
 | `hermes_home` | `/var/lib/hermes` | `HERMES_HOME`, the writable state directory |
 | `hermes_managed_config` | `{}` | keys pinned in the managed `config.yaml` |

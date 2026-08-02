@@ -1,0 +1,18 @@
+---
+
+ # Install optional Python packages into Hermes' own venv (root owned, so the
+ # agent cannot modify them) using the same uv the installer used. Needed for
+ # backends Hermes ships as optional extras - e.g. firecrawl-py for the firecrawl
+ # web_extract backend, which the base install omits. All extras go in one uv
+ # invocation so it resolves them together; uv prints "Installed" only when it
+ # actually changes the venv, so the agent is restarted only then (a re-run that
+ # finds everything satisfied prints "Audited" and is a no-op).
+ - name: install extra python packages into the hermes venv
+   become: yes
+   ansible.builtin.command:
+    argv: "{{ [hermes_uv_bin, 'pip', 'install', '--python', hermes_venv_python] + hermes_pip_extras }}"
+   register: hermes_pip_extras_result
+   changed_when: >-
+     'Installed' in ((hermes_pip_extras_result.stdout | default(''))
+                     ~ (hermes_pip_extras_result.stderr | default('')))
+   notify: restart hermes

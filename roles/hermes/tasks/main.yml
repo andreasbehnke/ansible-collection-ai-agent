@@ -2,6 +2,10 @@
 
  - include_tasks: preflight.yml
  - include_tasks: install.yml
+ # After install (it changes the venv), before config/service so the restart-hermes
+ # handler that this may queue fires once, at the end, with the deps in place.
+ - include_tasks: extras.yml
+   when: hermes_pip_extras | length > 0
  - include_tasks: config.yml
  - include_tasks: service.yml
  - include_tasks: context.yml

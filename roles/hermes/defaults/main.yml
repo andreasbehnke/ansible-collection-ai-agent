@@ -24,6 +24,20 @@
   # the fact that both directories are unreadable to it. Set to "" to skip it.
   hermes_ctl_bin: /usr/local/bin/hermesctl
 
+  # ---- extra python packages ----
+  # Optional pip requirements installed into Hermes' own venv, for backends that
+  # need a client library the base install omits - Hermes ships several as
+  # optional extras (e.g. the firecrawl web_extract backend needs firecrawl-py).
+  # Each entry is a pip requirement string (e.g. "firecrawl-py==4.17.0"); the
+  # composing playbook supplies them for the backends it enables. Installed with
+  # the same uv the installer used, into the root-owned venv (immutable to the
+  # agent), and Hermes is restarted so it picks them up. Empty means none.
+  hermes_pip_extras: []
+  # uv binary (the installer drops it in HERMES_HOME/bin) and the venv python it
+  # targets. Override only if the installer's layout changes.
+  hermes_uv_bin: "{{ hermes_home }}/bin/uv"
+  hermes_venv_python: "{{ hermes_code_dir }}/venv/bin/python"
+
   # ---- directories ----
   # Managed scope: administrator owned policy, not writable by the agent.
   hermes_config_dir: /etc/hermes

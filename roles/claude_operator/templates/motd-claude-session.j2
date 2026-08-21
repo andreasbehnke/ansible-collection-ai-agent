@@ -52,7 +52,7 @@ printf '\n'
   -e "s/^(  )(-[A-Za-z-]+(, --[A-Za-z-]+)?)/\1${FLAG}\2${OFF}/" \
   -e "s/^(  \* .*)$/${WARN}\1${OFF}/" \
   -e "s/^([A-Za-z].*:)$/${TITLE}\1${OFF}/" \
-  | sed 's/^/  /'
+  | sed 's/^\(.\)/  \1/'   # indent, but leave blank lines genuinely blank
 
 printf '\n'
 printf '  %sSign-in state:%s run %sclaude auth status%s · %sRemote Control ready?%s run %sclaude remote-control --help%s\n' \

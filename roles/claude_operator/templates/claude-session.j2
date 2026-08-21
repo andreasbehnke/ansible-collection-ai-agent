@@ -20,6 +20,11 @@ WORK="${HOME}/{{ claude_operator_workspace_dirname }}"
 CLAUDE="{{ claude_operator_bin }}"
 PERMISSION_MODE="{{ claude_operator_permission_mode }}"
 
+{# Everything below is bash, and bash's "${#array[@]}" opens a jinja comment.
+   Rendering stops here so the two languages cannot collide - every variable this
+   template substitutes is assigned above. #}
+{% raw %}
+
 usage() {
   cat <<'USAGE'
 claude-session - start or reattach a tmux hosted Claude Code session
@@ -157,3 +162,4 @@ fi
 # together rather than passing an argv.
 command_line="$(printf '%q ' "$CLAUDE" "${args[@]}")"
 exec tmux new-session -s "$session" -c "$cwd" "$command_line"
+{% endraw %}

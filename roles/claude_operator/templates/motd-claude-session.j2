@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+{{ ansible_managed | comment }}
+# Login banner for the Claude Code operator host.
+#
+# The body is claude-session's OWN --help output, not a copy of it. The wrapper
+# stays the single source of truth, so this banner cannot drift out of step with
+# the tool it documents - the sed rules below only add colour, and a rule that
+# stops matching leaves the line plain rather than wrong or missing.
+#
+# Runs as root out of pam_motd, whose environment is minimal: HOME may be unset,
+# which would abort the wrapper's "set -u" before it ever prints usage. Hence the
+# default below.
+
+SESSION_BIN="{{ claude_operator_session_bin }}"
+CLAUDE_BIN="{{ claude_operator_bin }}"
+WORKSPACE_DIRNAME="{{ claude_operator_workspace_dirname }}"
+PERMISSION_MODE="{{ claude_operator_permission_mode }}"
+{% raw %}
+set -u
+export HOME="${HOME:-/root}"
+
+# Nothing to advertise if the wrapper is not installed - stay silent rather than
+# printing a broken banner into every login.
+[ -x "$SESSION_BIN" ] || exit 0
+
+esc=$(printf '\033')
+FRAME="${esc}[38;5;67m"     # muted blue rule
+TITLE="${esc}[1;38;5;75m"   # bright blue, bold
+CMD="${esc}[1;38;5;79m"     # cyan, bold - the command forms
+FLAG="${esc}[38;5;222m"     # sand - option flags
+WARN="${esc}[38;5;179m"     # amber - the two gotchas
+DIM="${esc}[2m"
+OFF="${esc}[0m"
+
+rule() { printf '%s%s%s\n' "$FRAME" "────────────────────────────────────────────────────────────────────" "$OFF"; }
+
+version=$("$CLAUDE_BIN" --version 2>/dev/null | head -1)
+version=${version:-not installed}
+
+printf '\n'
+rule
+printf ' %sClaude Code — operator host%s   %s%s · sessions live in tmux · workspace ~/%s · %s%s\n' \
+  "$TITLE" "$OFF" "$DIM" "$version" "$WORKSPACE_DIRNAME" "$PERMISSION_MODE" "$OFF"
+rule
+printf '\n'
+
+# The wrapper's help, indented and colourised. Command forms cyan, option flags
+# sand, the two "cost an afternoon" bullets amber, section headings bold.
+"$SESSION_BIN" --help 2>/dev/null | sed -E \
+  -e "s/^(claude-session .*)$/${TITLE}\1${OFF}/" \
+  -e "s/^(  claude-session.*)$/${CMD}\1${OFF}/" \
+  -e "s/^(  )(-[A-Za-z-]+(, --[A-Za-z-]+)?)/\1${FLAG}\2${OFF}/" \
+  -e "s/^(  \* .*)$/${WARN}\1${OFF}/" \
+  -e "s/^([A-Za-z].*:)$/${TITLE}\1${OFF}/" \
+  | sed 's/^/  /'
+
+printf '\n'
+printf '  %sSign-in state:%s run %sclaude auth status%s · %sRemote Control ready?%s run %sclaude remote-control --help%s\n' \
+  "$DIM" "$OFF" "$FLAG" "$OFF" "$DIM" "$OFF" "$FLAG" "$OFF"
+printf '  %sIt prints the flag list when the account is eligible, and an error when it is not —%s\n' "$DIM" "$OFF"
+printf '  %sthe only non-interactive check for a feature whose failures are otherwise silent.%s\n' "$DIM" "$OFF"
+rule
+printf '\n'
+{% endraw %}

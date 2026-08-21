@@ -121,6 +121,18 @@ otherwise.
 Both things the wrapper's `--help` warns about are worth repeating: a new worktree is a new path and
 gets its **own** trust dialog, and its **own** session history.
 
+### The login banner
+
+The role also installs an `update-motd.d` snippet so anyone arriving over SSH sees what the host is
+for. It **runs `claude-session --help`** rather than repeating it, so the banner cannot drift out of
+step with the tool; the colouring is applied with `sed` rules that leave a line plain rather than
+wrong if one ever stops matching, and the snippet stays silent when the wrapper is not installed.
+
+Two details it has to get right, because `pam_motd` is an unusual place to run anything: the
+environment is minimal, so `HOME` is defaulted before calling the wrapper (its `set -u` would
+otherwise abort before printing anything), and the file must be executable and root-owned or Ubuntu
+skips it.
+
 ## Variables
 
 | Variable | Default | Description |
@@ -135,6 +147,7 @@ gets its **own** trust dialog, and its **own** session history.
 | `claude_operator_workspace_dirname` | `work` | Workspace root, relative to each home. Must not be empty |
 | `claude_operator_projects` | `[]` | Project directories created empty under every workspace root |
 | `claude_operator_session_bin` | `/usr/local/bin/claude-session` | Where the wrapper goes. `""` skips it |
+| `claude_operator_motd_path` | `/etc/update-motd.d/99-claude-session` | Login banner showing the wrapper's own `--help`, colourised. `""` installs none |
 | `claude_operator_permission_mode` | `acceptEdits` | Permission mode the wrapper starts sessions with. `dontAsk` is refused by `preflight.yml` |
 
 ### Why `dontAsk` is refused

@@ -65,6 +65,12 @@
   # Operator convenience over "claude --worktree --tmux=classic" and
   # "claude --remote-control". Set to "" to skip installing it.
   claude_operator_session_bin: /usr/local/bin/claude-session
+  # Login banner. An update-motd.d snippet that shows claude-session's own --help,
+  # colourised, so somebody arriving over SSH sees what the host is for without
+  # having to know the command exists. It runs the wrapper rather than repeating
+  # it, so the two cannot drift apart. Set to "" to install no banner.
+  claude_operator_motd_path: /etc/update-motd.d/99-claude-session
+
   # Permission mode the wrapper starts sessions with. Ergonomics here, not
   # containment: a human is present and can also answer from a connected device,
   # since permission prompts are forwarded and stay open until answered.

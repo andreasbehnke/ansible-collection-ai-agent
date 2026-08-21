@@ -13,6 +13,21 @@
     mode: "0755"
    when: claude_operator_session_bin | length > 0
 
+ # Shown by pam_motd at every SSH login. Deliberately after the wrapper: the
+ # banner executes it, so installing the banner first would briefly advertise a
+ # command that is not there yet.
+ - name: install the login banner
+   become: yes
+   ansible.builtin.template:
+    src: motd-claude-session.j2
+    dest: "{{ claude_operator_motd_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+   when:
+     - claude_operator_motd_path | length > 0
+     - claude_operator_session_bin | length > 0
+
  # The one step this role cannot perform. "claude auth login" opens a browser
  # flow; over SSH it degrades to "press c, approve the URL elsewhere, paste the
  # code back", and no ansible module can do that. Remote Control accepts nothing

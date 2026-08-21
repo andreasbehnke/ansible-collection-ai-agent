@@ -76,3 +76,11 @@ Signal is my chat interface to the agents, so this role installs signal-cli and 
 JSON-RPC/REST daemon as a hardened systemd service - see
 [`roles/signal_cli/README.md`](roles/signal_cli/README.md) for its variables, directory
 layout and password store entries.
+
+### [claude_operator](roles/claude_operator/README.md)
+
+Claude Code is my own agent rather than one of the hosted ones, so this role provisions a
+host to run it on: a pinned, root owned Claude Code, one login account per operator, and a
+`claude-session` wrapper over its worktree and tmux flags - see
+[`roles/claude_operator/README.md`](roles/claude_operator/README.md) for its variables, the
+manual sign in it cannot automate, and why it deliberately runs no service.

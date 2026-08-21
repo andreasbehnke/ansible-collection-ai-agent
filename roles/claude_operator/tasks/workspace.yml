@@ -1,0 +1,34 @@
+---
+
+ # One workspace root per account, holding long lived working trees - unlike the
+ # sibling deployment's per job scratch directories, which are reaped on a timer.
+ # The directories are long lived because Claude Code keys a session's history to
+ # its working directory: ~/.claude/projects/<the path with every non
+ # alphanumeric character replaced by ->. Move a tree and "claude --continue"
+ # finds nothing there, even though "claude --resume <id>" still works.
+
+ - name: create the workspace roots
+   become: yes
+   ansible.builtin.file:
+    path: "/home/{{ item.name }}/{{ claude_operator_workspace_dirname }}"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0755"
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+
+ # Created empty. The operator clones into them; the role does not manage
+ # repository contents, and deliberately does not hold deploy keys to do so.
+ - name: create the project directories
+   become: yes
+   ansible.builtin.file:
+    path: "/home/{{ item.0.name }}/{{ claude_operator_workspace_dirname }}/{{ item.1 }}"
+    state: directory
+    owner: "{{ item.0.name }}"
+    group: "{{ item.0.name }}"
+    mode: "0755"
+   loop: "{{ claude_operator_users | product(claude_operator_projects) | list }}"
+   loop_control:
+    label: "{{ item.0.name }}/{{ item.1 }}"

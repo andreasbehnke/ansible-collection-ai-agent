@@ -1,0 +1,44 @@
+---
+
+ # Operator convenience, the same idea as the hermes role's hermesctl wrapper -
+ # but this one does not switch user: these are the operator's own accounts and
+ # the wrapper runs as whoever calls it.
+ - name: install the claude-session operator wrapper
+   become: yes
+   ansible.builtin.template:
+    src: claude-session.j2
+    dest: "{{ claude_operator_session_bin }}"
+    owner: root
+    group: root
+    mode: "0755"
+   when: claude_operator_session_bin | length > 0
+
+ # The one step this role cannot perform. "claude auth login" opens a browser
+ # flow; over SSH it degrades to "press c, approve the URL elsewhere, paste the
+ # code back", and no ansible module can do that. Remote Control accepts nothing
+ # else: a setup-token credential is refused by name and API keys are not
+ # supported at all. So the role provisions everything up to the sign in and
+ # reports what is still missing, rather than pretending otherwise.
+ - name: check which accounts have signed in
+   become: yes
+   ansible.builtin.stat:
+    path: "/home/{{ item.name }}/.claude/.credentials.json"
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+   register: claude_operator_credentials
+
+ - name: report the accounts that still need a full scope login
+   ansible.builtin.debug:
+    msg: >-
+      No credential in /home/{{ item.item.name }}/.claude/.credentials.json.
+      Sign in by hand: "ssh {{ item.item.name }}@{{ inventory_hostname }}",
+      then "claude auth login" (press c, approve the URL on a machine with a
+      browser, paste the code back), then "claude auth status --json" - expect a
+      "Login method" row naming the claude.ai account. Run plain "claude" once in
+      /home/{{ item.item.name }}/{{ claude_operator_workspace_dirname }} to accept
+      the workspace trust dialog, which Remote Control requires.
+   loop: "{{ claude_operator_credentials.results }}"
+   loop_control:
+    label: "{{ item.item.name }}"
+   when: not item.stat.exists

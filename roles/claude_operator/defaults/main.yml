@@ -1,0 +1,74 @@
+---
+
+  # ---- operator accounts ----
+  # Login accounts, one per human operator, each entry a mapping of "name" and
+  # "authorized_keys" (a list of public key strings):
+  #   claude_operator_users:
+  #     - name: alice
+  #       authorized_keys:
+  #         - "ssh-ed25519 AAAA... alice@laptop"
+  # Every account gets a home (0700), a workspace root and, once it has signed
+  # in, its own ~/.claude holding the credential and every transcript.
+  #
+  # Deliberately LOGIN users, against this collection's "one service, one system
+  # user with nologin shell" convention: this host is not a service, it is the
+  # operator's own working environment (see README, "Deviations"). Empty by
+  # default because this repository is public - the composing playbook supplies
+  # the accounts and their keys.
+  claude_operator_users: []
+
+  # ---- claude code ----
+  # Pinned, like every upstream release in this collection. The floor is higher
+  # than it looks: Remote Control reconnect after a stale token needs 2.1.224 and
+  # effort control from a connected device needs 2.1.234.
+  #
+  # DISABLE_AUTOUPDATER is deliberately NOT set anywhere. The sibling deployment
+  # sets it because a version bump can change tool semantics under an unattended
+  # service; here a human is present and Remote Control's behaviour is version
+  # gated in ways that favour being current. The pin is the package, and an
+  # operator updating their own session is their business.
+  claude_operator_claude_version: "2.1.238"
+  # Installed globally under this prefix and left root owned, so an operator
+  # cannot silently drift the binary the whole host shares.
+  claude_operator_npm_prefix: /usr/local
+  claude_operator_bin: /usr/local/bin/claude
+
+  # ---- node runtime ----
+  # Claude Code is a node program. Installed from the NodeSource repository
+  # (Ubuntu ships an older node). Set to false once the distribution offers
+  # claude_operator_node_version, the role then only verifies it.
+  claude_operator_install_node: true
+  claude_operator_node_version: "22"
+
+  # ---- host packages ----
+  # tmux keeps a session alive across an SSH disconnect and, unlike a service,
+  # keeps a local terminal attached to it. git is what "claude --worktree" needs.
+  claude_operator_packages:
+    - tmux
+    - git
+
+  # ---- workspaces ----
+  # Working trees live under ~/<dirname>, one directory per project, and they are
+  # long lived: Claude Code keys a session's history to its working directory, so
+  # moving a tree loses "claude --continue" in the new location.
+  #
+  # The workspace root is deliberately NOT the home directory. The startup trust
+  # dialog never saves trust for a home directory, so a session started there can
+  # never satisfy the workspace-trust precondition Remote Control requires - and
+  # a session in $HOME has ~/.claude, the credential included, in scope.
+  claude_operator_workspace_dirname: work
+  # Project directories created empty under every account's workspace root. The
+  # operator clones into them; the role does not manage repository contents.
+  claude_operator_projects: []
+
+  # ---- session wrapper ----
+  # Operator convenience over "claude --worktree --tmux=classic" and
+  # "claude --remote-control". Set to "" to skip installing it.
+  claude_operator_session_bin: /usr/local/bin/claude-session
+  # Permission mode the wrapper starts sessions with. Ergonomics here, not
+  # containment: a human is present and can also answer from a connected device,
+  # since permission prompts are forwarded and stay open until answered.
+  # "dontAsk" is the correct value in the sibling deployment and the WRONG one
+  # here - it denies silently instead of asking someone who is right there.
+  # preflight.yml refuses it.
+  claude_operator_permission_mode: acceptEdits

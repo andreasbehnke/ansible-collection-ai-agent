@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+{{ ansible_managed | comment }}
+# Start or reattach a Claude Code session that survives an SSH disconnect.
+#
+# This is a thin wrapper, on purpose. Claude Code already creates git worktrees
+# and tmux sessions itself ("--worktree", "--tmux"), so the wrapper only resolves
+# a project name to a directory, works out the multi repository case, and keeps
+# the permission mode consistent. Everything else is upstream's.
+#
+# There is no systemd unit on this host and that is deliberate: a
+# "claude remote-control" server has no local terminal, and an always running one
+# is a standing remote execution channel into a machine holding a full scope
+# credential. tmux keeps the session alive AND keeps a terminal attached to it,
+# and the interactive form of Remote Control reconnects by itself after a network
+# outage, where server mode gives up after about ten minutes.
+
+set -euo pipefail
+
+WORK="${HOME}/{{ claude_operator_workspace_dirname }}"
+CLAUDE="{{ claude_operator_bin }}"
+PERMISSION_MODE="{{ claude_operator_permission_mode }}"
+
+usage() {
+  cat <<'USAGE'
+claude-session - start or reattach a tmux hosted Claude Code session
+
+  claude-session                        list projects and live sessions
+  claude-session <project>              attach the project's session, or start one
+  claude-session <project> <worktree>   new git worktree, in its own tmux session
+  claude-session -r <project> [...]     the same, with Remote Control enabled
+
+Options:
+  -r, --remote    enable Remote Control for the session, so it can be driven
+                  from claude.ai/code or the Claude mobile app. The session
+                  keeps running here; the device is a window, not a runtime.
+  -h, --help      this text
+
+A project is a directory under the workspace root. If it is a git repository,
+that is the session's working directory. If it CONTAINS repositories, the first
+one is the working directory and every sibling is passed as --add-dir, so one
+session sees the whole set - that is the multi repository case.
+
+Two things worth knowing, because both cost an afternoon otherwise:
+
+  * A new worktree is a new path, so it gets its OWN workspace trust dialog.
+    Accept it once, in that directory.
+  * Session history is keyed to the working directory, under
+    ~/.claude/projects/<path with every non alphanumeric character replaced by
+    ->. A worktree therefore has its own history, and "claude --continue" in one
+    never finds the other's. "claude --resume <id>" resolves from anywhere on
+    this host.
+
+"--worktree" branches the repository it runs in. Git has no cross repository
+worktree, so in a multi repository project only the primary repository is
+branched; the others are added read-write as they are.
+USAGE
+}
+
+remote=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -r|--remote) remote=1; shift ;;
+    -h|--help)   usage; exit 0 ;;
+    --)          shift; break ;;
+    -*)          printf 'claude-session: unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
+    *)           break ;;
+  esac
+done
+
+if [ ! -d "$WORK" ]; then
+  printf 'claude-session: no workspace root at %s\n' "$WORK" >&2
+  exit 1
+fi
+
+# ---- no arguments: show what there is -------------------------------------
+if [ $# -eq 0 ]; then
+  # Collected into variables rather than piped into "grep -q": with pipefail a
+  # short circuiting reader makes the whole pipeline fail, and an empty list
+  # would be indistinguishable from a broken one.
+  projects="$(find "$WORK" -mindepth 1 -maxdepth 1 -type d -printf '  %f\n' | sort)"
+  sessions="$(tmux list-sessions 2>/dev/null | sed 's/^/  /' || true)"
+
+  printf 'projects in %s:\n' "$WORK"
+  if [ -n "$projects" ]; then
+    printf '%s\n' "$projects"
+  else
+    printf '  (none yet - create one and clone into it)\n'
+  fi
+
+  printf '\nlive tmux sessions:\n'
+  if [ -n "$sessions" ]; then
+    printf '%s\n' "$sessions"
+  else
+    printf '  (none)\n'
+  fi
+  exit 0
+fi
+
+project="$1"; shift
+worktree="${1:-}"
+
+dir="$WORK/$project"
+if [ ! -d "$dir" ]; then
+  printf 'claude-session: no such project: %s\n' "$dir" >&2
+  exit 1
+fi
+
+# ---- resolve the working directory and the multi repository case -----------
+# "-e" rather than "-d" on .git: in a worktree it is a file, not a directory.
+add_dirs=()
+if [ -e "$dir/.git" ]; then
+  cwd="$dir"
+else
+  repos=()
+  while IFS= read -r repo; do
+    repos+=("$repo")
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d -exec test -e '{}/.git' ';' -print | sort)
+  if [ "${#repos[@]}" -gt 0 ]; then
+    cwd="${repos[0]}"
+    for repo in "${repos[@]:1}"; do
+      add_dirs+=(--add-dir "$repo")
+    done
+  else
+    cwd="$dir"
+  fi
+fi
+
+args=(--permission-mode "$PERMISSION_MODE")
+if [ "$remote" -eq 1 ]; then
+  args+=(--remote-control)
+fi
+if [ "${#add_dirs[@]}" -gt 0 ]; then
+  args+=("${add_dirs[@]}")
+fi
+
+# ---- a worktree of its own: Claude Code makes both the tree and the session -
+if [ -n "$worktree" ]; then
+  if [ ! -e "$cwd/.git" ]; then
+    printf 'claude-session: not a git repository, so it cannot be branched: %s\n' "$cwd" >&2
+    exit 1
+  fi
+  cd "$cwd"
+  # --tmux=classic, not bare --tmux: the default prefers iTerm2 native panes,
+  # which do not exist on a headless host.
+  exec "$CLAUDE" --worktree "$worktree" --tmux=classic "${args[@]}"
+fi
+
+# ---- the project's own session --------------------------------------------
+# tmux session names cannot carry every character a path can.
+session="${project//[^a-zA-Z0-9_-]/-}"
+
+if tmux has-session -t "=$session" 2>/dev/null; then
+  exec tmux attach-session -t "=$session"
+fi
+
+# tmux takes the command as ONE argument and re-splits it, so quote it back
+# together rather than passing an argv.
+command_line="$(printf '%q ' "$CLAUDE" "${args[@]}")"
+exec tmux new-session -s "$session" -c "$cwd" "$command_line"

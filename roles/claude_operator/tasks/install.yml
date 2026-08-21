@@ -1,0 +1,56 @@
+---
+
+ - name: install the host packages the operator's sessions need
+   become: yes
+   ansible.builtin.apt:
+    name: "{{ claude_operator_packages }}"
+    state: present
+    update_cache: yes
+   when: claude_operator_packages | length > 0
+
+ # ---- claude code ---------------------------------------------------------
+ # Installed globally as root and left root owned: every account on this host
+ # shares one binary at a known version, and an operator cannot drift it without
+ # noticing. npm's --prefix puts the launcher in {{ claude_operator_bin }} and
+ # the package under <prefix>/lib/node_modules.
+ - name: read the installed claude code version
+   become: yes
+   ansible.builtin.command: "{{ claude_operator_bin }} --version"
+   register: claude_operator_version_check
+   changed_when: false
+   failed_when: false
+   check_mode: no
+
+ # "claude --version" prints "2.1.238 (Claude Code)".
+ - name: install claude code at the pinned version
+   become: yes
+   ansible.builtin.command:
+    argv:
+      - npm
+      - install
+      - --global
+      - --prefix
+      - "{{ claude_operator_npm_prefix }}"
+      - "@anthropic-ai/claude-code@{{ claude_operator_claude_version }}"
+   when: >-
+    claude_operator_version_check.rc != 0 or
+    claude_operator_claude_version not in (claude_operator_version_check.stdout | default(''))
+
+ # npm already installs as root here, this only enforces it: a tree that ever
+ # became writable to somebody else would let that account change the binary the
+ # whole host shares. Guarded by a stat so check mode on a fresh machine, where
+ # the install task was skipped, does not fail on a missing path.
+ - name: check whether claude code is installed
+   become: yes
+   ansible.builtin.stat:
+    path: "{{ claude_operator_npm_prefix }}/lib/node_modules/@anthropic-ai/claude-code"
+   register: claude_operator_code_dir
+
+ - name: make the claude code installation root owned
+   become: yes
+   ansible.builtin.file:
+    path: "{{ claude_operator_npm_prefix }}/lib/node_modules/@anthropic-ai/claude-code"
+    owner: root
+    group: root
+    recurse: yes
+   when: claude_operator_code_dir.stat.exists

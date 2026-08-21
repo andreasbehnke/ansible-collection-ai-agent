@@ -1,0 +1,12 @@
+---
+
+ - include_tasks: node.yml
+   when: claude_operator_install_node
+ - include_tasks: preflight.yml
+ - include_tasks: install.yml
+ - include_tasks: users.yml
+ - include_tasks: workspace.yml
+ # Runs last: it renders the operator wrapper and reports which accounts still
+ # need the one step this role cannot perform, so that message is the last thing
+ # on screen rather than scrolled away.
+ - include_tasks: session.yml

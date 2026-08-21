@@ -18,6 +18,10 @@ anything else from the private infrastructure it is used from - examples use pla
   * signal_cli - installs signal-cli, runs its JSON-RPC/REST daemon as a systemd service
     under the unprivileged `signal` user; read only configuration in /etc/signal-cli,
     writable state in /var/lib/signal-cli, accounts restored from the password store
+  * claude_operator - provisions a host for running Claude Code as the operator,
+    interactively and through Remote Control; pinned root owned Claude Code, one login
+    account per operator with a workspace root under their home, and the claude-session
+    wrapper. No service and no /etc scope - the deviations are argued in its README
 * tools - operational helper scripts, one directory per role, named `tools/<role_name>`
   * signal_cli/export_account.py - exports a registered account into the password store
   * signal_cli/register_landline.py - registers a new account for a landline number by

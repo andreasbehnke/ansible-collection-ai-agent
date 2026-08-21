@@ -1,0 +1,140 @@
+---
+
+ # The sibling roles assert that a secret exists, because that secret is their
+ # entire inbound control. This role asserts the mirror image: that NOTHING
+ # outranks the credential this host needs. Claude Code resolves credentials by a
+ # seven rank precedence and an interactive claude.ai login is rank 7 of 7, the
+ # bottom - every other source wins silently. The symptom is not a billing
+ # surprise but a capability loss: Remote Control eligibility is evaluated
+ # against whichever credential actually won, and it refuses anything that is not
+ # a full scope login.
+
+ - name: assert at least one operator account is configured
+   ansible.builtin.assert:
+    that:
+      - claude_operator_users | length > 0
+    fail_msg: >-
+      claude_operator_users is empty. This role provisions login accounts for
+      human operators; without one there is nobody to own the credential, the
+      workspaces and the sessions. Supply the accounts from the composing
+      playbook or the inventory.
+
+ - name: assert every operator account has a name and at least one public key
+   ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.authorized_keys is defined
+      - item.authorized_keys | length > 0
+    fail_msg: >-
+      Every entry of claude_operator_users needs a "name" and a non empty
+      "authorized_keys" list. The accounts are login accounts and this host has
+      no password authentication, so an account without a key is unreachable.
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name | default('<unnamed>') }}"
+
+ - name: assert the workspace root is not the home directory
+   ansible.builtin.assert:
+    that:
+      - claude_operator_workspace_dirname | length > 0
+    fail_msg: >-
+      claude_operator_workspace_dirname is empty, which would make the workspace
+      root the home directory. The startup trust dialog never saves trust for a
+      home directory, so such a session can never satisfy the workspace trust
+      precondition Remote Control requires - and it would put ~/.claude, the
+      credential included, in the session's scope.
+
+ - name: assert nothing in the controller environment outranks a full scope login
+   ansible.builtin.assert:
+    that:
+      - lookup('env', 'ANTHROPIC_API_KEY') | length == 0
+      - lookup('env', 'ANTHROPIC_AUTH_TOKEN') | length == 0
+      - lookup('env', 'CLAUDE_CODE_OAUTH_TOKEN') | length == 0
+      - lookup('env', 'CLAUDE_CODE_USE_BEDROCK') | length == 0
+      - lookup('env', 'CLAUDE_CODE_USE_VERTEX') | length == 0
+      - lookup('env', 'CLAUDE_CODE_USE_FOUNDRY') | length == 0
+    fail_msg: >-
+      A credential that outranks the claude.ai login is set in the environment
+      this playbook runs from, and could reach the target through the connection.
+      Remote Control eligibility is evaluated against whichever credential wins,
+      so the host would refuse to establish sessions with an error naming the
+      credential rather than the environment.
+
+ # The asserts above cover the controller. This one covers the target, which is
+ # where the variable would actually do the damage: /etc/environment is the
+ # system wide place a well meaning administrator puts an API key. Per account
+ # shell files and ~/.claude/settings.json belong to the operator and are checked
+ # by hand after signing in (see README).
+ - name: read the system wide environment file of the target
+   become: yes
+   ansible.builtin.slurp:
+    src: /etc/environment
+   register: claude_operator_target_environment
+   failed_when: false
+   check_mode: no
+
+ - name: assert nothing on the target outranks a full scope login or disables the feature flags
+   ansible.builtin.assert:
+    that:
+      - target_environment is not search('ANTHROPIC_API_KEY')
+      - target_environment is not search('ANTHROPIC_AUTH_TOKEN')
+      - target_environment is not search('ANTHROPIC_BASE_URL')
+      - target_environment is not search('CLAUDE_CODE_OAUTH_TOKEN')
+      - target_environment is not search('CLAUDE_CODE_USE_BEDROCK')
+      - target_environment is not search('CLAUDE_CODE_USE_VERTEX')
+      - target_environment is not search('CLAUDE_CODE_USE_FOUNDRY')
+      - target_environment is not search('DISABLE_TELEMETRY')
+      - target_environment is not search('DO_NOT_TRACK')
+      - target_environment is not search('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC')
+      - target_environment is not search('DISABLE_GROWTHBOOK')
+    fail_msg: >-
+      /etc/environment on this host sets a variable that either outranks the
+      claude.ai login or disables the feature flag evaluation Remote Control
+      availability depends on. Every one of these failures is silent: the host
+      installs cleanly, sessions start cleanly, and they simply never appear in
+      the session list. Remove the variable rather than re-running the login.
+   vars:
+    target_environment: "{{ (claude_operator_target_environment.content | default('')) | b64decode }}"
+
+ # An assert on a JUDGEMENT rather than on a fact, and unusual for this
+ # collection. It is here because dontAsk is the CORRECT value one role away, for
+ # the unattended agent host where nobody can answer a prompt, and copying a
+ # value between two roles that look alike is exactly how it would arrive here.
+ # On this host a human is present, at the terminal or on a connected device, so
+ # dontAsk is silent friction rather than protection.
+ - name: assert the permission mode is one a present human can answer
+   ansible.builtin.assert:
+    that:
+      - claude_operator_permission_mode != 'dontAsk'
+    fail_msg: >-
+      claude_operator_permission_mode is 'dontAsk', which denies unapproved tools
+      instead of prompting. This host is interactive and its prompts are also
+      forwarded to connected devices, where they stay open until answered.
+
+ - name: read the node version
+   ansible.builtin.command: node --version
+   register: claude_operator_node_check
+   changed_when: false
+   failed_when: false
+   check_mode: no
+
+ - name: assert a node runtime is installed
+   ansible.builtin.assert:
+    that:
+      - claude_operator_node_check.rc == 0
+    fail_msg: >-
+      no node runtime found on PATH. Claude Code needs node
+      {{ claude_operator_node_version }} or later. Either let this role install
+      it (claude_operator_install_node) or provide it beforehand.
+
+ # node --version prints "v22.14.0".
+ - name: assert the node version is recent enough
+   ansible.builtin.assert:
+    that:
+      - node_major | int >= claude_operator_node_version | int
+    fail_msg: >-
+      node {{ node_major }} found, this role expects node
+      {{ claude_operator_node_version }} or later.
+   vars:
+    node_major: "{{ claude_operator_node_check.stdout | regex_search('v([0-9]+)', '\\1') | default(['0'], true) | first }}"

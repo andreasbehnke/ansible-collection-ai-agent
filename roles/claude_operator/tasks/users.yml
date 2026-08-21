@@ -1,0 +1,54 @@
+---
+
+ # Login accounts, not the nologin system users the rest of this collection
+ # creates. The deviation is deliberate and argued in the README: this host is
+ # the operator's working environment, so the account needs a shell, a home it
+ # owns and its own ~/.claude - which holds the credential and every transcript.
+
+ - name: create the operator groups
+   become: yes
+   ansible.builtin.group:
+    name: "{{ item.name }}"
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+
+ - name: create the operator accounts
+   become: yes
+   ansible.builtin.user:
+    name: "{{ item.name }}"
+    group: "{{ item.name }}"
+    home: "/home/{{ item.name }}"
+    create_home: yes
+    shell: /bin/bash
+    system: no
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+
+ # 0700 rather than the distribution default: the home holds ~/.claude, and this
+ # host may carry several operators who have no business reading each other's
+ # credential, transcripts or working trees.
+ - name: restrict the operator homes to their owner
+   become: yes
+   ansible.builtin.file:
+    path: "/home/{{ item.name }}"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0700"
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+
+ # exclusive: yes so a key removed from the inventory is removed from the host.
+ # This host has no password authentication, so these keys are the only way in.
+ - name: place the operators' public ssh keys
+   become: yes
+   ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.authorized_keys | join('\n') }}"
+    exclusive: yes
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"

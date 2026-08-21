@@ -71,6 +71,13 @@ service sets it because a version bump can change tool semantics underneath it. 
 present, and Remote Control's behaviour is version gated in ways that favour being current - so the
 pin is the package, and the absence of the variable is a choice rather than an oversight.
 
+Root ownership is what makes that safe, and it has been observed doing its job: on a host pinned to
+2.1.238 the autoupdater attempted 2.1.239 and recorded
+`{"path":"npm-global","outcome":"failed","status":"no_permissions"}` in
+`~/.claude/.last-update-result.json`. The operator's session keeps running the pinned binary and
+nothing drifts into `~/.local`. Expect that line in the log; it is the design working, not a fault.
+Raise the pin in `claude_operator_claude_version` when you want the new version.
+
 ## Directory layout
 
 | Path | Owner | Mode | Purpose |
@@ -79,7 +86,7 @@ pin is the package, and the absence of the variable is a choice rather than an o
 | `/usr/local/lib/node_modules/@anthropic-ai/claude-code` | `root:root` | | The package itself |
 | `/usr/local/bin/claude-session` | `root:root` | `0755` | The session wrapper |
 | `/home/<operator>` | operator | `0700` | Home. Several operators have no business reading each other's |
-| `/home/<operator>/.claude` | operator | `0700` | **The credential and every transcript.** Created by Claude Code, not by this role |
+| `/home/<operator>/.claude` | operator | `0700` | **The credential and every transcript.** Created by Claude Code with the login user's umask (so it lands `0775`); the role re-asserts `0700` once it exists, but never creates it — its existence is what tells the role the account has signed in |
 | `/home/<operator>/work` | operator | `0755` | Workspace root, one directory per project |
 
 The workspace root is deliberately **not** the home directory. The startup trust dialog never saves

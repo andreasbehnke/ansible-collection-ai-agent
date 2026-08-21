@@ -41,6 +41,35 @@
    loop_control:
     label: "{{ item.name }}"
 
+ # Claude Code creates ~/.claude itself, with the login user's umask - which on
+ # Ubuntu is 0002, so the directory lands 0775. The credential inside it is 0600
+ # and the transcript directories are 0700, and the 0700 home above already stops
+ # anyone traversing in, so this is defence in depth rather than a hole being
+ # closed. It matters as soon as a host carries a second operator, or if the home
+ # mode is ever relaxed. Guarded by a stat because the role must NOT create this
+ # directory: its existence is what tells the role the account has signed in.
+ - name: check whether the claude configuration directory exists
+   become: yes
+   ansible.builtin.stat:
+    path: "/home/{{ item.name }}/.claude"
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+   register: claude_operator_config_dirs
+
+ - name: restrict the claude configuration directories to their owner
+   become: yes
+   ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    state: directory
+    owner: "{{ item.item.name }}"
+    group: "{{ item.item.name }}"
+    mode: "0700"
+   loop: "{{ claude_operator_config_dirs.results }}"
+   loop_control:
+    label: "{{ item.item.name }}"
+   when: item.stat.exists
+
  # exclusive: yes so a key removed from the inventory is removed from the host.
  # This host has no password authentication, so these keys are the only way in.
  - name: place the operators' public ssh keys

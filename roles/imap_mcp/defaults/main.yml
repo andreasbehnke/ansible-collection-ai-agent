@@ -6,7 +6,7 @@
   # cloned and built as root and left root owned, so neither the agent nor the
   # service user can modify the executables (see README).
   imap_mcp_repo: "https://github.com/nikolausm/imap-mcp-server.git"
-  imap_mcp_version: "v1.5.2"
+  imap_mcp_version: "v2.0.0"
   imap_mcp_code_dir: /usr/local/lib/imap-mcp-server
 
   # ---- stdio -> HTTP bridge ----
@@ -24,8 +24,11 @@
   # imap-mcp-server and supergateway need node. Installed from the NodeSource
   # repository (Ubuntu ships an older node). Set to false once the distribution
   # offers imap_mcp_node_version, the role then only verifies it.
+  # imap-mcp-server v2.0.0 declares engines.node ">=22.12.0" and guards it with a
+  # dependency tree test, so anything below 22 now fails the build. Pinned higher
+  # than that floor: node 20 went EOL 2026-04-30 and 22 is already in maintenance.
   imap_mcp_install_node: true
-  imap_mcp_node_version: "20"
+  imap_mcp_node_version: "26"
 
   # ---- service identity ----
   imap_mcp_user: imap-mcp

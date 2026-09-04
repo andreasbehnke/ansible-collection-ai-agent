@@ -1,0 +1,18 @@
+---
+
+dependencies: []
+
+galaxy_info:
+  author: ab@andreasbehnke.com
+  description: Installs imap-mcp-server behind a loopback stdio to HTTP bridge and runs it as a system service
+  license: GNU Public license V3
+  min_ansible_version: "2.16"
+  platforms:
+  - name: Ubuntu
+    versions:
+    - all
+  - name: Debian
+    versions:
+    - all
+  categories:
+    - system

@@ -18,6 +18,11 @@ anything else from the private infrastructure it is used from - examples use pla
   * signal_cli - installs signal-cli, runs its JSON-RPC/REST daemon as a systemd service
     under the unprivileged `signal` user; read only configuration in /etc/signal-cli,
     writable state in /var/lib/signal-cli, accounts restored from the password store
+  * imap_mcp - installs imap-mcp-server and the mcp-proxy stdio to streamable-HTTP
+    bridge, runs it as a systemd service under the unprivileged `imap-mcp` user bound to
+    the loopback interface; read only configuration in /etc/imap-mcp, state in
+    /var/lib/imap-mcp, mailbox account restored from the password store, and a server
+    side tool allowlist of read only tools plus imap_save_draft
   * claude_operator - provisions a host for running Claude Code as the operator,
     interactively and through Remote Control; pinned root owned Claude Code, one login
     account per operator with a workspace root under their home, and the claude-session
@@ -26,6 +31,10 @@ anything else from the private infrastructure it is used from - examples use pla
   * signal_cli/export_account.py - exports a registered account into the password store
   * signal_cli/register_landline.py - registers a new account for a landline number by
     voice verification
+  * imap_mcp/init_account.py - creates the mailbox account once by driving upstream's
+    imap_add_account tool over a one-shot stdio MCP session
+  * imap_mcp/export_account.py - exports the encrypted account store into the password
+    store
 
 Role directories must be named lowercase with underscores; a role is referenced as
 `andreasbehnke.ai_agent.<role_name>`.

@@ -128,7 +128,7 @@
       {{ claude_operator_node_version }} or later. Either let this role install
       it (claude_operator_install_node) or provide it beforehand.
 
- # node --version prints "v22.14.0".
+ # node --version prints "v26.8.1".
  - name: assert the node version is recent enough
    ansible.builtin.assert:
     that:

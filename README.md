@@ -77,6 +77,14 @@ JSON-RPC/REST daemon as a hardened systemd service - see
 [`roles/signal_cli/README.md`](roles/signal_cli/README.md) for its variables, directory
 layout and password store entries.
 
+### [imap_mcp](roles/imap_mcp/README.md)
+
+Mail is what I most often want an agent to read, so this role installs
+imap-mcp-server behind a loopback stdio-to-HTTP bridge and runs it as a hardened systemd
+service, exposing a server side allowlist of read only tools plus `imap_save_draft` - see
+[`roles/imap_mcp/README.md`](roles/imap_mcp/README.md) for its variables, directory layout
+and password store entries.
+
 ### [claude_operator](roles/claude_operator/README.md)
 
 Claude Code is my own agent rather than one of the hosted ones, so this role provisions a

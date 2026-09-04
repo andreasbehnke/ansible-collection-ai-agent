@@ -1,7 +1,7 @@
 ---
 
   # ---- signal-cli release ----
-  signal_cli_version: "0.14.6"
+  signal_cli_version: "0.14.7"
   signal_cli_install_dir: /opt
   signal_cli_bin_link: /usr/local/bin/signal-cli
   # ---- java runtime ----

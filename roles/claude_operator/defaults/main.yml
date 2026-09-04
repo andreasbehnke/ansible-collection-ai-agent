@@ -27,7 +27,7 @@
   # service; here a human is present and Remote Control's behaviour is version
   # gated in ways that favour being current. The pin is the package, and an
   # operator updating their own session is their business.
-  claude_operator_claude_version: "2.1.238"
+  claude_operator_claude_version: "2.1.251"
   # Installed globally under this prefix and left root owned, so an operator
   # cannot silently drift the binary the whole host shares.
   claude_operator_npm_prefix: /usr/local
@@ -38,7 +38,7 @@
   # (Ubuntu ships an older node). Set to false once the distribution offers
   # claude_operator_node_version, the role then only verifies it.
   claude_operator_install_node: true
-  claude_operator_node_version: "22"
+  claude_operator_node_version: "26"
 
   # ---- host packages ----
   # tmux keeps a session alive across an SSH disconnect and, unlike a service,

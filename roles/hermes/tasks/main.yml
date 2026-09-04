@@ -10,7 +10,7 @@
  - include_tasks: service.yml
  - include_tasks: context.yml
    when: hermes_context_files | length > 0
- # Runs last: service.yml re-owns the whole state directory to hermes:hermes,
- # so the media dirs are re-grouped to the reader group only afterwards.
+ # Runs last: it owns the group of the shared media directories outright, and
+ # service.yml prunes them out of its ownership repair so the two do not fight.
  - include_tasks: media.yml
    when: hermes_media_reader_group | length > 0

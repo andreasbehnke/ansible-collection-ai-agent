@@ -1,0 +1,22 @@
+---
+
+ # Shared by the two ownership tasks in tasks/service.yml.
+ #
+ # The media directories are PRUNED. They belong to tasks/media.yml, which gives
+ # them the reader group so the chat daemon can read what Hermes writes there.
+ # This tree used to be chowned with "file: recurse=yes", which took that group
+ # away again on every single run - media.yml put it back, both tasks reported
+ # changed forever, and the notify on them restarted the reader services every
+ # time the role ran. Pruning is what lets the two coexist.
+ #
+ # -mindepth 1 because HERMES_HOME itself is owned by its own task, non
+ # recursively. The expression selects anything the service user cannot own,
+ # which after a root side install is mostly logs.
+ hermes_ownership_find: >-
+   find {{ hermes_home | quote }} -mindepth 1
+   {% if hermes_media_reader_group | length > 0 %}
+   {% for dir in hermes_media_dirs %}
+   -path {{ (hermes_home ~ '/' ~ dir) | quote }} -prune -o
+   {% endfor %}
+   {% endif %}
+   ( -not -user {{ hermes_user | quote }} -o -not -group {{ hermes_group | quote }} )

@@ -30,10 +30,11 @@
    loop: "{{ hermes_media_dirs }}"
    notify: restart media reader services
 
- # service.yml re-owns the whole state tree to hermes:hermes on every run, so
- # existing media files are re-grouped to the reader here (mode left to the
- # umask). Files written before the umask was relaxed stay 0600 and are not
- # readable until the cache regenerates them; new ones are 0640.
+ # Files Hermes already wrote here are re-grouped to the reader (mode left to
+ # the umask). service.yml prunes these directories out of its ownership repair,
+ # so this is the only place their group is decided and a re-run changes nothing.
+ # Files written before the umask was relaxed stay 0600 and are not readable
+ # until the cache regenerates them; new ones are 0640.
  - name: re-group existing files in the shared media directories
    become: yes
    ansible.builtin.file:

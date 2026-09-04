@@ -28,6 +28,12 @@
  # The installer and the service installer run as root and leave root owned
  # files behind in the state directory (logs above all), which the service
  # cannot write to afterwards. Enforced here, after the last root side task.
+ #
+ # Asserted, then repaired only where it is actually wrong, instead of a blanket
+ # "recurse: yes". The blanket chown also re-grouped the shared media directories
+ # to hermes on every run; media.yml set them back, so both tasks reported changed
+ # forever and the notify on them restarted the reader services every single run.
+ # vars/main.yml prunes those directories out of the search for that reason.
  - name: own the state directory
    become: yes
    ansible.builtin.file:
@@ -35,7 +41,27 @@
     state: directory
     owner: "{{ hermes_user }}"
     group: "{{ hermes_group }}"
-    recurse: yes
+
+ # -print -quit: this only has to answer "is anything wrong", and stopping at the
+ # first hit keeps it cheap on a state tree with tens of thousands of files.
+ - name: look for state entries the service user does not own
+   become: yes
+   ansible.builtin.command:
+    cmd: "{{ hermes_ownership_find }} -print -quit"
+   register: hermes_misowned
+   changed_when: false
+   check_mode: no
+
+ # -h so a symlink is retargeted rather than its target, which may live outside
+ # the state tree. One exec for the whole batch, and only when the check above
+ # found something.
+ - name: repair the ownership of the state tree
+   become: yes
+   ansible.builtin.command:
+    cmd: >-
+     {{ hermes_ownership_find }}
+     -exec chown -h {{ hermes_user }}:{{ hermes_group }} {} +
+   when: hermes_misowned.stdout | length > 0
 
  - name: create the systemd drop-in directory
    become: yes

@@ -33,16 +33,33 @@
     group: root
     mode: "0644"
 
- - name: add the nodesource repository
+ # The repository file is written whole rather than through apt_repository,
+ # which only ensures a line is PRESENT: bumping the pinned major left the previous
+ # major's line in place, so a host ended up with two NodeSource repositories
+ # enabled at once and the candidate decided by whichever numbered higher.
+ - name: pin the nodesource repository to node {{ claude_operator_node_version }}
    become: yes
-   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_{{ claude_operator_node_version }}.x nodistro main"
-    filename: nodesource
-    state: present
-    update_cache: yes
+   ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/nodesource.list
+    content: |
+      deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_{{ claude_operator_node_version }}.x nodistro main
+    owner: root
+    group: root
+    mode: "0644"
+   register: claude_operator_nodesource_repo
 
- - name: install nodejs
+ - name: refresh the package index after a repository change
+   become: yes
+   ansible.builtin.apt:
+    update_cache: yes
+   when: claude_operator_nodesource_repo.changed
+
+ # state: latest, not present. "present" is satisfied by ANY installed nodejs,
+ # so on a host that already had a node it silently kept the old major and the
+ # preflight assert below failed with "node N found, this role expects M".
+ # The major is pinned by the repository above; latest only moves within it.
+ - name: install nodejs from the pinned major
    become: yes
    ansible.builtin.apt:
     name: nodejs
-    state: present
+    state: latest

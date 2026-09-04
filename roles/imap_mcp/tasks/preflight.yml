@@ -9,7 +9,7 @@
       authentication and must not be reachable off host.
 
  - name: read the node version
-   ansible.builtin.command: node --version
+   ansible.builtin.command: "{{ imap_mcp_node_bin }} --version"
    register: imap_mcp_node_check
    changed_when: false
    failed_when: false
@@ -20,7 +20,7 @@
     that:
       - imap_mcp_node_check.rc == 0
     fail_msg: >-
-      no node runtime found on PATH. imap-mcp-server and supergateway need node
+      no node runtime at {{ imap_mcp_node_bin }}. imap-mcp-server needs node
       {{ imap_mcp_node_version }} or later. Either let this role install it
       (imap_mcp_install_node) or provide it beforehand.
 

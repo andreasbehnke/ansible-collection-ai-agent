@@ -29,6 +29,14 @@
   # than that floor: node 20 went EOL 2026-04-30 and 22 is already in maintenance.
   imap_mcp_install_node: true
   imap_mcp_node_version: "26"
+  # Absolute paths, NOT the bare names. Other software puts a node of its own on
+  # the shared PATH - the Hermes installer symlinks /usr/local/bin/node at its
+  # private runtime - and /usr/local/bin precedes /usr/bin, so a bare "node"
+  # silently resolves to someone else's major. That made preflight read a
+  # version this role never installed and, worse, made the service execute it.
+  # Override both when the caller provides the runtime from somewhere else.
+  imap_mcp_node_bin: /usr/bin/node
+  imap_mcp_npm_bin: /usr/bin/npm
 
   # ---- service identity ----
   imap_mcp_user: imap-mcp

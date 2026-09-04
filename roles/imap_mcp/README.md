@@ -122,7 +122,8 @@ touching `pass`.
 | `imap_mcp_proxy_version` | `0.12.0` | pinned `mcp-proxy` version (in a root venv) |
 | `imap_mcp_proxy_dir` | `/usr/local/lib/mcp-proxy` | bridge venv path |
 | `imap_mcp_proxy_path` | `/mcp` | streamable-HTTP endpoint path |
-| `imap_mcp_install_node` / `imap_mcp_node_version` | `true` / `20` | install Node from NodeSource, or verify only |
+| `imap_mcp_install_node` / `imap_mcp_node_version` | `true` / `26` | install Node from NodeSource, or verify only |
+| `imap_mcp_node_bin` / `imap_mcp_npm_bin` | `/usr/bin/node` / `/usr/bin/npm` | Absolute interpreter paths, used by preflight, the build and the unit's `ExecStart`. Bare names resolve through PATH, where `/usr/local/bin` wins and another package's private node can shadow the pinned one |
 | `imap_mcp_user` / `imap_mcp_group` | `imap-mcp` | service identity |
 | `imap_mcp_service_name` | `imap-mcp` | systemd unit name |
 | `imap_mcp_home` | `/var/lib/imap-mcp` | `HOME` / state directory holding the credentials |

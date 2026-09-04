@@ -26,7 +26,7 @@
    become: yes
    ansible.builtin.command:
     argv:
-      - npm
+      - "{{ claude_operator_npm_bin }}"
       - install
       - --global
       - --prefix

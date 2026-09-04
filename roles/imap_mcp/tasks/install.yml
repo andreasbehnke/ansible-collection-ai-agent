@@ -48,7 +48,7 @@
  - name: install dependencies and build imap-mcp-server
    become: yes
    ansible.builtin.shell:
-    cmd: "npm ci || npm install; npm run build"
+    cmd: "{{ imap_mcp_npm_bin }} ci || {{ imap_mcp_npm_bin }} install; {{ imap_mcp_npm_bin }} run build"
     chdir: "{{ imap_mcp_code_dir }}"
    when: imap_mcp_git.changed or not imap_mcp_dist.stat.exists
 

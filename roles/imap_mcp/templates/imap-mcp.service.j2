@@ -15,7 +15,7 @@ Environment=HOME={{ imap_mcp_home }}
 Environment=IMAP_MCP_ENABLED_TOOLS={{ imap_mcp_enabled_tools | join(',') }}
 # mcp-proxy binds the loopback interface and bridges the stdio server to
 # streamable HTTP; --pass-environment hands the allowlist to the child.
-ExecStart={{ imap_mcp_proxy_dir }}/bin/mcp-proxy --host {{ imap_mcp_http_host }} --port {{ imap_mcp_port }} --stateless --pass-environment -- node {{ imap_mcp_code_dir }}/dist/index.js
+ExecStart={{ imap_mcp_proxy_dir }}/bin/mcp-proxy --host {{ imap_mcp_http_host }} --port {{ imap_mcp_port }} --stateless --pass-environment -- {{ imap_mcp_node_bin }} {{ imap_mcp_code_dir }}/dist/index.js
 
 Restart=on-failure
 RestartSec=10

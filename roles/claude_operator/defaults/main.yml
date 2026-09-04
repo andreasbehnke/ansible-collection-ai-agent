@@ -39,6 +39,13 @@
   # claude_operator_node_version, the role then only verifies it.
   claude_operator_install_node: true
   claude_operator_node_version: "26"
+  # Absolute paths, NOT the bare names. Other software puts a node of its own on
+  # the shared PATH - the Hermes installer symlinks /usr/local/bin/node at its
+  # private runtime - and /usr/local/bin precedes /usr/bin, so a bare "node"
+  # silently resolves to someone else's major. Override both when the caller
+  # provides the runtime from somewhere else.
+  claude_operator_node_bin: /usr/bin/node
+  claude_operator_npm_bin: /usr/bin/npm
 
   # ---- host packages ----
   # tmux keeps a session alive across an SSH disconnect and, unlike a service,

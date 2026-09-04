@@ -142,7 +142,8 @@ skips it.
 | `claude_operator_npm_prefix` | `/usr/local` | npm `--prefix` for the global install |
 | `claude_operator_bin` | `/usr/local/bin/claude` | The installed launcher |
 | `claude_operator_install_node` | `true` | Install node from the NodeSource repository. Set to false to provide it yourself; the role then only asserts the version |
-| `claude_operator_node_version` | `"22"` | Required node major version |
+| `claude_operator_node_version` | `"26"` | Required node major version |
+| `claude_operator_node_bin` / `claude_operator_npm_bin` | `/usr/bin/node` / `/usr/bin/npm` | Absolute interpreter paths. Bare names resolve through PATH, where `/usr/local/bin` wins and another package's private node can shadow the pinned one |
 | `claude_operator_packages` | `[tmux, git]` | Host packages the operator's sessions need. `tmux` keeps a session alive across an SSH disconnect, `git` is what `--worktree` needs |
 | `claude_operator_workspace_dirname` | `work` | Workspace root, relative to each home. Must not be empty |
 | `claude_operator_projects` | `[]` | Project directories created empty under every workspace root |

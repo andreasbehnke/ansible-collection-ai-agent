@@ -27,7 +27,7 @@
   # service; here a human is present and Remote Control's behaviour is version
   # gated in ways that favour being current. The pin is the package, and an
   # operator updating their own session is their business.
-  claude_operator_claude_version: "2.1.251"
+  claude_operator_claude_version: "2.1.260"
   # Installed globally under this prefix and left root owned, so an operator
   # cannot silently drift the binary the whole host shares.
   claude_operator_npm_prefix: /usr/local

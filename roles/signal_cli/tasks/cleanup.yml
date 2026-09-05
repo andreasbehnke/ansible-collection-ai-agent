@@ -1,0 +1,48 @@
+---
+
+ # Every release unpacks into its own {{ signal_cli_install_dir }}/signal-cli-<version>
+ # and nothing ever removed the previous one, so an upgraded host accumulated a
+ # full copy per version (~117 MB each).
+ #
+ # The release the daemon is CURRENTLY running is never removed, and that is read
+ # off the running process rather than assumed. It matters on the run that
+ # performs an upgrade: the symlink is repointed in install.yml but the restart
+ # is a handler, so it has not fired yet and the daemon is still executing from
+ # the old directory. Deleting it there would pull the jars out from under a
+ # running JVM. Excluding it means an upgrade run prunes nothing and the next
+ # run - by which time the daemon really is on the pinned release - cleans up.
+
+ - name: read the release the running signal-cli daemon is using
+   become: yes
+   ansible.builtin.shell:
+    cmd: >-
+     pid=$(systemctl show {{ signal_cli_service_name }} -p MainPID --value);
+     test -r "/proc/$pid/cmdline" || exit 0;
+     tr '\0' '\n' < "/proc/$pid/cmdline"
+     | grep -o '{{ signal_cli_install_dir }}/signal-cli-[0-9][0-9.]*'
+     | sort -u
+   changed_when: false
+   check_mode: no
+   register: signal_cli_running_release
+
+ - name: find the installed signal-cli releases
+   become: yes
+   ansible.builtin.find:
+    paths: "{{ signal_cli_install_dir }}"
+    patterns: "signal-cli-[0-9]*"
+    use_regex: no
+    file_type: directory
+    recurse: no
+   register: signal_cli_installed_releases
+
+ - name: remove signal-cli releases that are neither pinned nor running
+   become: yes
+   ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+   loop: >-
+    {{ signal_cli_installed_releases.files
+       | map(attribute='path')
+       | difference([signal_cli_install_dir ~ '/signal-cli-' ~ signal_cli_version])
+       | difference(signal_cli_running_release.stdout_lines | default([]))
+       | list }}

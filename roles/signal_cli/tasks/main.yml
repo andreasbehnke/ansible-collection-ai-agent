@@ -10,3 +10,7 @@
  - include_tasks: service.yml
  - include_tasks: profile.yml
    when: signal_cli_profile | length > 0
+ # Last: it must see the service as service.yml left it, to know which release
+ # is in use and therefore must survive.
+ - include_tasks: cleanup.yml
+   when: signal_cli_remove_old_releases

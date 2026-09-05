@@ -3,6 +3,11 @@
   # ---- signal-cli release ----
   signal_cli_version: "0.14.7"
   signal_cli_install_dir: /opt
+  # Releases unpack into signal_cli_install_dir/signal-cli-<version>. With this
+  # set, every release there other than the pinned one - and the one the daemon
+  # is currently running, which is never touched - is removed, so upgrades do not
+  # leave a full copy behind each time. Set to false to keep them for rollback.
+  signal_cli_remove_old_releases: true
   signal_cli_bin_link: /usr/local/bin/signal-cli
   # ---- java runtime ----
   # signal-cli 0.14.x is compiled for java 25 (class file 69.0). Current

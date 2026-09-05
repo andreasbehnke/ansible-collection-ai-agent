@@ -284,12 +284,13 @@ sudo systemctl start signal-cli
 
 | Variable | Default | Description |
 |---|---|---|
-| `signal_cli_version` | `0.14.6` | pinned signal-cli release to install |
+| `signal_cli_version` | `0.14.7` | pinned signal-cli release to install |
 | `signal_cli_install_java` | `true` | install Temurin from the Adoptium repository, see above |
 | `signal_cli_java_version` | `"25"` | Temurin major version to install |
 | `signal_cli_java_packages_absent` | `[openjdk-21-jre-headless]` | older runtimes to remove |
 | `signal_cli_java_min_version` | `{{ signal_cli_java_version }}` | minimum major version asserted on `PATH` |
 | `signal_cli_install_dir` | `/opt` | where the release archive is unpacked |
+| `signal_cli_remove_old_releases` | `true` | remove releases under `signal_cli_install_dir` other than the pinned one. The release the daemon is currently running is never removed, so the run that upgrades prunes nothing and the next one cleans up. Set to `false` to keep them for rollback |
 | `signal_cli_bin_link` | `/usr/local/bin/signal-cli` | symlink placed into `PATH` |
 | `signal_cli_java_min_version` | `25` | minimum java major version, asserted, not installed |
 | `signal_cli_user` | `signal` | service user, created as a system user without login shell |

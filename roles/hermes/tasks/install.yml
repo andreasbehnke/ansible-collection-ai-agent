@@ -45,9 +45,87 @@
     group: root
     mode: "0700"
 
+ # ---- resolving the pin -------------------------------------------------------
+ # The tag has to become a commit here because the installer cannot do it:
+ # --commit validates ^[0-9a-fA-F]{7,40}$ and rejects a tag name outright, and
+ # --branch <tag> runs "git remote set-branches origin <tag>" plus
+ # "git pull --ff-only origin <tag>" on an existing install, which rewrites
+ # remote.origin.fetch to a ref that does not exist.
+ #
+ # ^{} is the peel and it is load-bearing: release tags are ANNOTATED, so
+ # refs/tags/v2026.8.31 is the tag object (6e8f8418) while refs/tags/v2026.8.31^{}
+ # is the commit (29112bef). Handing the tag object to --commit checks out the
+ # wrong thing. Both refs are printed by ls-remote, so match the peeled one.
+ - name: resolve the pinned release tag to its commit
+   become: yes
+   ansible.builtin.command:
+    argv:
+      - git
+      - ls-remote
+      - "{{ hermes_repo_url }}"
+      - "refs/tags/{{ hermes_version }}^{}"
+   register: hermes_tag_resolve
+   changed_when: false
+   check_mode: no
+   when: hermes_version | length > 0
+
+ - name: require the pinned tag to exist upstream
+   ansible.builtin.assert:
+    that: hermes_tag_resolve.stdout | length > 0
+    fail_msg: >-
+     hermes_version "{{ hermes_version }}" does not resolve to a tag in
+     {{ hermes_repo_url }}. Release tags are calendar versioned, e.g. v2026.8.31.
+   when: hermes_version | length > 0
+
+ - name: read the currently installed commit
+   become: yes
+   ansible.builtin.command:
+    argv: [git, -C, "{{ hermes_code_dir }}", rev-parse, HEAD]
+   register: hermes_installed_commit
+   changed_when: false
+   failed_when: false
+   check_mode: no
+   when: hermes_version | length > 0
+
+ # ---- installing ---------------------------------------------------------------
  # Run as root: this installs the code to {{ hermes_code_dir }} and the launcher
  # to {{ hermes_bin }}, both root owned, so the agent cannot modify its own code.
  # The data directory is taken from HERMES_HOME.
+ #
+ # --force-commit is required, not optional: the installer refuses to move an
+ # existing checkout backwards without it, and moving backwards is exactly what
+ # pinning to a release does on a host that drifted onto main.
+ #
+ # --skip-setup/--non-interactive were previously omitted and it worked only
+ # because ansible hands the script a non-tty stdin. Re-running is routine now
+ # that the pin can change, so say it rather than rely on that.
+ #
+ # The checkout is a shallow --depth 1 clone, so the target commit is usually not
+ # present locally; the installer's own "git fetch origin <sha>" fetches it, which
+ # is why the full 40 character sha matters.
+ - name: install hermes at the pinned commit
+   become: yes
+   ansible.builtin.command:
+    argv:
+      - /usr/local/src/hermes-install.sh
+      - --commit
+      - "{{ hermes_pinned_commit }}"
+      - --force-commit
+      - --skip-setup
+      - --non-interactive
+   environment:
+    HERMES_HOME: "{{ hermes_home }}"
+   vars:
+    hermes_pinned_commit: "{{ hermes_tag_resolve.stdout.split() | first }}"
+   when:
+    - hermes_version | length > 0
+    - (hermes_installed_commit.rc | default(1)) != 0 or
+      (hermes_installed_commit.stdout | default('')) != (hermes_tag_resolve.stdout.split() | first)
+   register: hermes_install_pinned
+   notify: restart hermes
+
+ # Unpinned fallback: the previous behaviour, kept so hermes_version: "" is a real
+ # opt-out rather than a broken state. creates: guards it, so it runs once.
  - name: install hermes
    become: yes
    ansible.builtin.command: /usr/local/src/hermes-install.sh
@@ -55,7 +133,18 @@
     HERMES_HOME: "{{ hermes_home }}"
    args:
     creates: "{{ hermes_bin }}"
-   register: hermes_install
+   register: hermes_install_unpinned
+   when: hermes_version | length == 0
+   notify: restart hermes
+
+ # Consumed by service.yml, which must regenerate the systemd unit when the code
+ # changed: a new release can change ExecStart or the watchdog, and the unit is
+ # otherwise only rewritten when it is missing.
+ - name: record whether the code tree changed
+   ansible.builtin.set_fact:
+    hermes_code_changed: >-
+     {{ (hermes_install_pinned is defined and hermes_install_pinned.changed | default(false))
+        or (hermes_install_unpinned is defined and hermes_install_unpinned.changed | default(false)) }}
 
  # Operator convenience: run the CLI as the service user without knowing the
  # user, HERMES_HOME and that both directories are unreadable to other logins.

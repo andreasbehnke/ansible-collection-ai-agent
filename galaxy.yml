@@ -2,7 +2,7 @@
 
 namespace: andreasbehnke
 name: ai_agent
-version: 0.9.0
+version: 1.0.0
 readme: README.md
 authors:
   - ab@andreasbehnke.com

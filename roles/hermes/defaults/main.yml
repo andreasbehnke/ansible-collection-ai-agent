@@ -14,8 +14,21 @@
     - curl
     - xz-utils
     - build-essential
-  # The installer has no version pinning, updates are done with "hermes update".
+  # Upstream release tag to pin the checkout to, e.g. "v2026.8.31". Set to "" to
+  # take whatever the installer's default branch serves, which is what this role
+  # did before and is how an unreviewed main-branch commit once reached this host.
+  #
+  # The installer has no --tag: --commit rejects anything that is not a hex SHA,
+  # and --branch corrupts remote.origin.fetch when handed a tag on an existing
+  # install. tasks/install.yml therefore resolves the tag to its commit itself.
+  #
+  # DO NOT run "hermes update" on a pinned install. From a detached HEAD it
+  # reattaches to main and silently discards the pin; "hermes update --branch
+  # <tag>" is rejected outright. Move the pin here and re-run the role instead.
+  hermes_version: "v2026.8.31"
   hermes_installer_url: https://hermes-agent.nousresearch.com/install.sh
+  # Cloned by the installer; also where the tag is resolved against.
+  hermes_repo_url: https://github.com/NousResearch/hermes-agent.git
   # Locations the installer uses when it runs as root.
   hermes_bin: /usr/local/bin/hermes
   hermes_code_dir: /usr/local/lib/hermes-agent

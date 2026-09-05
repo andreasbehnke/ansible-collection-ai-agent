@@ -20,9 +20,14 @@
     --run-as-user {{ hermes_user }} --force
    environment:
     HERMES_HOME: "{{ hermes_home }}"
+   # Also when the code tree moved: a new release can change ExecStart, the
+   # watchdog interval or Type=, and upstream's own "gateway status" regenerates
+   # and compares the unit - so a stale one left behind after a version change
+   # surfaces later as drift rather than here.
    when: >-
     hermes_unit_file.content is not defined or
-    ('User=' ~ hermes_user) not in (hermes_unit_file.content | b64decode)
+    ('User=' ~ hermes_user) not in (hermes_unit_file.content | b64decode) or
+    hermes_code_changed | default(false)
    notify: restart hermes
 
  # The installer and the service installer run as root and leave root owned

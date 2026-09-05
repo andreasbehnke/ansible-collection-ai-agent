@@ -85,6 +85,14 @@ service, exposing a server side allowlist of read only tools plus `imap_save_dra
 [`roles/imap_mcp/README.md`](roles/imap_mcp/README.md) for its variables, directory layout
 and password store entries.
 
+### [buzz](roles/buzz/README.md)
+
+Buzz is a Nostr based workspace where a community is one relay, so this role installs
+the `buzz` CLI the Hermes adapter shells out to - pinned, checksum verified and
+extracted from the upstream desktop release, since no standalone CLI is published. No
+service and no state; see [`roles/buzz/README.md`](roles/buzz/README.md) for the
+three-key identity model and why the CLI path must be pinned, not just the binary.
+
 ### [claude_operator](roles/claude_operator/README.md)
 
 Claude Code is my own agent rather than one of the hosted ones, so this role provisions a

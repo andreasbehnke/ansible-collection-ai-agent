@@ -1,0 +1,21 @@
+---
+
+ # Fail on the pin being absent rather than silently installing whatever the
+ # "latest" release happens to be that day - the whole point of the variable.
+ - name: assert a buzz release is pinned
+   ansible.builtin.assert:
+    that:
+      - buzz_version | length > 0
+      - buzz_deb_sha256 | length > 0
+    fail_msg: >-
+     buzz_version and buzz_deb_sha256 must both be set. The checksum is not
+     optional: the .deb is fetched over the network and the binary inside it is
+     installed root owned into {{ buzz_bin }}.
+
+ # The adapter resolves BUZZ_CLI_PATH -> which("buzz") -> ~/bin/buzz. The last
+ # of those sits in the agent's own writable state, so an absolute path outside
+ # it is the only safe answer.
+ - name: assert the binary path is absolute
+   ansible.builtin.assert:
+    that: buzz_bin is match('^/')
+    fail_msg: "buzz_bin must be an absolute path, got: {{ buzz_bin }}"

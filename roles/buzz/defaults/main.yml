@@ -1,0 +1,35 @@
+---
+
+  # ---- buzz CLI release ----
+  # The Hermes buzz adapter shells out to this binary for every outbound
+  # operation ("JSON in, JSON out"); inbound uses its own Nostr WebSocket.
+  #
+  # Upstream publishes NO standalone CLI artifact - the `buzz` binary ships
+  # inside the Buzz Desktop .deb, and the only other route is building the Rust
+  # workspace with cargo. So the role fetches the pinned .deb and extracts the
+  # single binary from it. That is not as odd as it looks: `buzz` links only
+  # libc, libm and libgcc - no GTK, no WebKit - so it stands alone on a headless
+  # host, and extracting avoids pulling a desktop's dependency tree onto a
+  # hardened server.
+  #
+  # To bump: pick a desktop-v* release, update both the version and the sha256
+  # (sha256sum of the downloaded .deb).
+  buzz_version: "desktop-v0.5.23"
+  buzz_deb_url: "https://github.com/block/buzz/releases/download/{{ buzz_version }}/Buzz_{{ buzz_version | regex_replace('^desktop-v', '') }}_amd64.deb"
+  buzz_deb_sha256: "94f1e50021f88f8864f568c86a8ea2b39993da64e3fe8d86bf731cd00c1c9cce"
+
+  # Installed root owned, and the path is handed to the adapter as BUZZ_CLI_PATH
+  # by the composing playbook. Both halves matter: the adapter's own resolution
+  # order is BUZZ_CLI_PATH -> which("buzz") -> ~/bin/buzz, and that last fallback
+  # is inside the agent's writable state directory - an agent that could drop a
+  # binary there would choose the code it then executes. Pinning the path keeps
+  # "the agent cannot modify its own code" true.
+  buzz_bin: /usr/local/bin/buzz
+
+  # Packages needed to unpack the .deb. dpkg-deb is in dpkg, which is always
+  # present on a Debian family host; listed so a minimal image still works.
+  buzz_packages:
+    - dpkg
+
+  # Where the download is staged. Root owned, outside any service's reach.
+  buzz_download_dir: /usr/local/src

@@ -1,0 +1,4 @@
+---
+
+ - include_tasks: preflight.yml
+ - include_tasks: install.yml

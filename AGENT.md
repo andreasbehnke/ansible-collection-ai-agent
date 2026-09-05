@@ -23,6 +23,10 @@ anything else from the private infrastructure it is used from - examples use pla
     the loopback interface; read only configuration in /etc/imap-mcp, state in
     /var/lib/imap-mcp, mailbox account restored from the password store, and a server
     side tool allowlist of read only tools plus imap_save_draft
+  * buzz - installs the buzz CLI the Hermes Buzz platform adapter shells out to,
+    extracted from the upstream desktop release because no standalone CLI artifact
+    is published; no service and no state, the CLI takes identity and relay from
+    the environment on each call
   * claude_operator - provisions a host for running Claude Code as the operator,
     interactively and through Remote Control; pinned root owned Claude Code, one login
     account per operator with a workspace root under their home, and the claude-session
@@ -35,6 +39,8 @@ anything else from the private infrastructure it is used from - examples use pla
     imap_add_account tool over a one-shot stdio MCP session
   * imap_mcp/export_account.py - exports the encrypted account store into the password
     store
+  * buzz/new_identity.py - generates the agent's Nostr keypair, self-testing its
+    curve implementation against the BIP-340 vector before printing
 
 Role directories must be named lowercase with underscores; a role is referenced as
 `andreasbehnke.ai_agent.<role_name>`.

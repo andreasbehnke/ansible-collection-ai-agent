@@ -1,0 +1,58 @@
+---
+
+ - name: install the prerequisites for unpacking the release
+   become: yes
+   ansible.builtin.apt:
+    name: "{{ buzz_packages }}"
+    state: present
+    update_cache: yes
+   when: buzz_packages | length > 0
+
+ # checksum makes get_url both verifying and idempotent: a matching file is left
+ # alone, a corrupted or substituted one is re-fetched and fails loudly.
+ - name: download the pinned buzz release
+   become: yes
+   ansible.builtin.get_url:
+    url: "{{ buzz_deb_url }}"
+    dest: "{{ buzz_download_dir }}/buzz-{{ buzz_version }}.deb"
+    checksum: "sha256:{{ buzz_deb_sha256 }}"
+    owner: root
+    group: root
+    mode: "0600"
+   register: buzz_download
+
+ - name: create a staging directory for the extracted release
+   become: yes
+   ansible.builtin.file:
+    path: "{{ buzz_download_dir }}/buzz-{{ buzz_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+ # Only the CLI is taken. The .deb also carries buzz-desktop and its GUI
+ # dependencies, none of which belong on a headless agent host.
+ - name: extract the release
+   become: yes
+   ansible.builtin.command:
+    cmd: "dpkg-deb -x {{ buzz_download_dir }}/buzz-{{ buzz_version }}.deb {{ buzz_download_dir }}/buzz-{{ buzz_version }}"
+    creates: "{{ buzz_download_dir }}/buzz-{{ buzz_version }}/usr/bin/buzz"
+
+ - name: install the buzz CLI
+   become: yes
+   ansible.builtin.copy:
+    src: "{{ buzz_download_dir }}/buzz-{{ buzz_version }}/usr/bin/buzz"
+    dest: "{{ buzz_bin }}"
+    remote_src: yes
+    owner: root
+    group: root
+    mode: "0755"
+
+ # Proves the extracted binary actually runs on this host before anything tries
+ # to use it - a GUI-linked build would fail here rather than at first message.
+ - name: verify the installed CLI runs
+   become: yes
+   ansible.builtin.command:
+    cmd: "{{ buzz_bin }} --help"
+   changed_when: false
+   check_mode: no

@@ -122,7 +122,7 @@ tools/buzz/new_identity.py | sed -n 's/^private key: //p' \
 
 # on the relay host
 docker compose -f /etc/docker/compose/buzz/docker-compose.yml \
-  exec -T relay buzz-admin add-member <public key>
+  exec -T relay buzz-admin add-member --pubkey <public key>
 docker compose -f /etc/docker/compose/buzz/docker-compose.yml \
   exec -T relay buzz-admin list-members
 ```

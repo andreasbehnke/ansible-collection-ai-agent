@@ -24,7 +24,7 @@ Nothing is written to disk. Store it yourself, e.g.
 Then enrol the PUBLIC key as a community member, on the relay host:
 
     docker compose -f /etc/docker/compose/buzz/docker-compose.yml \\
-      exec -T relay buzz-admin add-member <public key>
+      exec -T relay buzz-admin add-member --pubkey <public key>
 """
 
 import argparse

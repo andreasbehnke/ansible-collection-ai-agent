@@ -2,3 +2,6 @@
 
  - include_tasks: preflight.yml
  - include_tasks: install.yml
+ # Last: needs the installed CLI, and only runs when the caller asked for it.
+ - include_tasks: profile.yml
+   when: buzz_profile.name | default('') | length > 0

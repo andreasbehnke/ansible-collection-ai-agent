@@ -1,0 +1,32 @@
+---
+
+ # Every task here carries the private key in its environment, hence no_log on
+ # all of them - including the read, whose registered result is still usable.
+ - name: read the published buzz profile
+   become: yes
+   ansible.builtin.command:
+    argv: ["{{ buzz_bin }}", users, get]
+   environment:
+    BUZZ_RELAY_URL: "{{ buzz_relay_url }}"
+    BUZZ_PRIVATE_KEY: "{{ lookup('community.general.passwordstore', buzz_private_key_entry) }}"
+   register: buzz_profile_read
+   changed_when: false
+   check_mode: no
+   no_log: true
+
+ # `users get` answers [] for an identity that never published a profile, and a
+ # one-element list with display_name once it has.
+ - name: compare the published profile with the wanted one
+   ansible.builtin.set_fact:
+    buzz_profile_published_name: "{{ ((buzz_profile_read.stdout | from_json) | first | default({})).display_name | default('') }}"
+
+ - name: publish the buzz profile
+   become: yes
+   ansible.builtin.command:
+    argv: "{{ [buzz_bin, 'users', 'set-profile', '--name', buzz_profile.name]
+              + (['--about', buzz_profile.about] if buzz_profile.about | default('') | length > 0 else []) }}"
+   environment:
+    BUZZ_RELAY_URL: "{{ buzz_relay_url }}"
+    BUZZ_PRIVATE_KEY: "{{ lookup('community.general.passwordstore', buzz_private_key_entry) }}"
+   when: buzz_profile_published_name != buzz_profile.name
+   no_log: true

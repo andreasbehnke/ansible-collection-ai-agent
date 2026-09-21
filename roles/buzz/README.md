@@ -34,6 +34,23 @@ desktop package's dependency tree onto a hardened agent host would not.
 | `buzz_bin` | `/usr/local/bin/buzz` | where the CLI is installed, root owned |
 | `buzz_download_dir` | `/usr/local/src` | staging for the download and extraction |
 | `buzz_packages` | `[dpkg]` | needed to unpack the release |
+| `buzz_profile` | `{}` | `name` (and optional `about`) to publish for the identity; empty = install only |
+| `buzz_relay_url` | `""` | relay to publish the profile on; required when `buzz_profile` is set |
+| `buzz_private_key_entry` | `""` | **pass entry path** of the identity's hex private key; required when `buzz_profile` is set |
+
+## The profile is not optional for the adapter
+
+The adapter connects only after `buzz users get` returns its own profile. An
+identity that never published one gets `[]` back, and the adapter fails with
+*"'users get' returned no profile — is the key a member of this community?"* —
+misleadingly, since membership is fine. The display name also drives the
+adapter's mention gating, so a nameless agent cannot be @-mentioned in a channel.
+
+Setting `buzz_profile` makes the role publish it, like `signal_cli_profile` does
+for Signal. Idempotent: it reads the published name first and only runs
+`set-profile` when it differs (changing only `about` therefore does not
+republish). Every task that touches the key sets `no_log`, and the key reaches the
+CLI through the environment, never argv.
 
 To bump: choose a `desktop-v*` release, set `buzz_version`, and set
 `buzz_deb_sha256` to `sha256sum` of the downloaded `.deb`.

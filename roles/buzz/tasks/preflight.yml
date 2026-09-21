@@ -19,3 +19,13 @@
    ansible.builtin.assert:
     that: buzz_bin is match('^/')
     fail_msg: "buzz_bin must be an absolute path, got: {{ buzz_bin }}"
+
+ - name: assert a profile has somewhere to be published
+   ansible.builtin.assert:
+    that:
+      - buzz_relay_url | length > 0
+      - buzz_private_key_entry | length > 0
+    fail_msg: >-
+     buzz_profile is set, so the role publishes it - which needs buzz_relay_url
+     and buzz_private_key_entry (a pass entry path, not the key itself).
+   when: buzz_profile.name | default('') | length > 0

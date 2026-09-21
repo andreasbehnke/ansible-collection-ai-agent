@@ -33,3 +33,21 @@
 
   # Where the download is staged. Root owned, outside any service's reach.
   buzz_download_dir: /usr/local/src
+
+  # ---- published profile (optional) ----
+  # The Hermes adapter refuses to connect until its identity has a published
+  # profile: it runs `buzz users get` to learn its own pubkey, and a key that
+  # never published kind:0 metadata gets back [] and fails with "'users get'
+  # returned no profile - is the key a member of this community?" - even when
+  # it is a member. The display name also drives the adapter's mention gating,
+  # so a nameless agent cannot be @-mentioned in a channel at all.
+  #
+  # Empty means the role only installs the CLI. Set all three to have it
+  # publish the profile, idempotently (only when the published name differs).
+  buzz_profile: {}
+  #   name: "Agent"            # display name, the one people @-mention
+  #   about: "..."             # optional bio
+  buzz_relay_url: ""
+  # pass ENTRY PATH of the identity's 64-char hex private key; read on the
+  # controller, handed to the CLI through the environment only, never argv.
+  buzz_private_key_entry: ""

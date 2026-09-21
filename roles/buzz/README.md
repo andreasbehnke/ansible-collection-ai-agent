@@ -66,8 +66,9 @@ the hermes role:
     hermes_managed_env:
       BUZZ_RELAY_URL: "https://buzz.example.com"
       BUZZ_CLI_PATH: "{{ buzz_bin }}"
+    # a pass ENTRY PATH - the hermes role looks it up itself, with no_log
     hermes_managed_env_secrets:
-      BUZZ_PRIVATE_KEY: "{{ lookup('community.general.passwordstore', 'private/network/buzz/<agent>/private-key') }}"
+      BUZZ_PRIVATE_KEY: "private/network/buzz/<agent>/private-key"
     hermes_managed_config:
       gateway:
         platforms:

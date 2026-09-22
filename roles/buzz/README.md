@@ -145,6 +145,49 @@ docker compose -f /etc/docker/compose/buzz/docker-compose.yml \
   exec -T relay buzz-admin list-members
 ```
 
+## Connecting Buzz Desktop
+
+Humans reach the same community through Buzz Desktop on their own workstation.
+This role does not install it — it is the full `.deb` the CLI is extracted from,
+GTK and WebKit included — so on a Debian family desktop install it by hand, from
+the same release the agent's CLI is pinned to:
+
+```bash
+v=0.5.23    # match buzz_version
+curl -fLO "https://github.com/block/buzz/releases/download/desktop-v$v/Buzz_${v}_amd64.deb"
+sha256sum "Buzz_${v}_amd64.deb"    # compare with buzz_deb_sha256
+sudo apt install "./Buzz_${v}_amd64.deb"
+```
+
+It pulls in `libwebkit2gtk-4.1-0` and `libgtk-3-0`, and besides `buzz-desktop`
+installs `buzz`, `buzz-agent`, `buzz-acp`, `buzz-dev-mcp`,
+`buzz-backend-kubernetes` and `git-credential-nostr` into `/usr/bin`.
+
+Then give it an identity and a relay:
+
+1. **Identity.** Use the owner key from the table above, never the agent's. The
+   app can generate one, or import one generated here with
+   `tools/buzz/new_identity.py --nsec` (it takes the `nsec` form). It keeps the
+   key in the desktop keyring through the Secret Service
+   (`org.freedesktop.secrets`), so a session keyring such as gnome-keyring or
+   KeePassXC must be running and unlocked.
+2. **Membership.** On a closed relay the key must be enrolled before the app can
+   connect — `buzz-admin add-member --pubkey <hex public key>` on the relay host,
+   exactly as for the agent.
+3. **Relay.** Add the community by its relay URL (`wss://buzz.example.com`). The
+   certificate must be publicly trusted — see above; a private CA fails in the
+   app alone.
+
+The app keeps its state under `~/.local/share/xyz.block.buzz.app` and
+`~/.config/xyz.block.buzz.app`. The `.deb` also puts a `buzz` CLI on the
+desktop's `PATH`, which is handy for checking what the agent sees (the key is
+read from the terminal, so it stays out of shell history):
+
+```bash
+read -rs BUZZ_PRIVATE_KEY && export BUZZ_PRIVATE_KEY
+BUZZ_RELAY_URL=https://buzz.example.com buzz users get
+```
+
 ## Paths
 
 | Path | Owner | Purpose |

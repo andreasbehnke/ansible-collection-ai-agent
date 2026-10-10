@@ -280,7 +280,7 @@ $ tools/claude_operator/check_clipboard.py <user>@<host> --route osc52 --term xt
 
 The check drives a real Claude Code on the host and never submits a prompt. For the X11 route it
 starts Claude Code from an `ssh -X` login shell, injects the keys, mouse drags and bracketed pastes a
-terminal sends, reconnects on a second display, and compares the result with your local Wayland
+terminal sends, reconnects on a second display, and compares the result with your local
 clipboard. For the OSC 52 route it starts Claude Code with no X11 at all, attaches a real tmux
 client over `ssh -tt` for each `TERM`, makes a selection, and asserts that the client receives
 `ESC ] 52 ; c ; <base64 of the selection>`. Whether the terminal then honours that sequence is the

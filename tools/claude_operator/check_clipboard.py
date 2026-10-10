@@ -8,7 +8,7 @@ checked; see its README, section "Copy and paste".
 
 The X11 route (terminals without OSC 52, GNOME Terminal among them): Claude is started in
 tmux from a login shell of an "ssh -X" connection and used again after a NEW connection
-has replaced it. Results are read from the REAL local clipboard with wl-paste, so a PASS
+has replaced it. Results are read from the REAL local clipboard, so a PASS
 means the bytes reached this desktop, not a tmux buffer on the host. Cases, each before
 and after the reconnect:
 
@@ -23,8 +23,9 @@ the clipboard escape "ESC ] 52 ; c ; <base64 of the selection>" - exactly what s
 terminal turns into a clipboard write. The terminal's own acceptance of OSC 52 is its
 documented behaviour and not tested here.
 
-Standard library only, per the collection's tooling convention. Needs wl-copy/wl-paste
-locally (a Wayland session) for the X11 route and key based SSH to the operator account.
+Standard library only, per the collection's tooling convention. Needs xclip locally (or
+wl-clipboard on a desktop without XWayland) for the X11 route, and key based SSH to the
+operator account.
 
 Usage:
     ./check_clipboard.py <user>@<host> [--project <dir under ~/work>]
@@ -38,9 +39,11 @@ previous local clipboard text back.
 
 import argparse
 import base64
+import os
 import re
 import secrets
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -108,15 +111,45 @@ def read_display(connection):
     return line.removeprefix("DISPLAY=")
 
 
+# The local clipboard is reached through XWayland with xclip when there is a DISPLAY:
+# GNOME keeps the X11 and Wayland clipboards in sync, and wl-copy/wl-paste need window
+# focus on GNOME (there is no data-control protocol), which Mutter does not always grant -
+# they then block forever. wl-clipboard remains the fallback for a desktop without X.
+LOCAL_TIMEOUT = 5
+
+
+def _local_tool():
+    if os.environ.get("DISPLAY") and shutil.which("xclip"):
+        return "xclip"
+    if shutil.which("wl-paste"):
+        return "wl"
+    sys.exit("check_clipboard: needs xclip (with DISPLAY) or wl-clipboard locally")
+
+
 def local_clipboard():
-    result = subprocess.run(["wl-paste", "--no-newline", "--type", "text"],
-                            capture_output=True, text=True)
+    if _local_tool() == "xclip":
+        command = ["xclip", "-selection", "clipboard", "-o"]
+    else:
+        command = ["wl-paste", "--no-newline", "--type", "text"]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True,
+                                timeout=LOCAL_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"check_clipboard: reading the local clipboard with {command[0]} hangs")
     return result.stdout if result.returncode == 0 else None
 
 
 def set_local_clipboard(content, mime="text/plain"):
     data = content.encode() if isinstance(content, str) else content
-    subprocess.run(["wl-copy", "--type", mime], input=data, check=True)
+    if _local_tool() == "xclip":
+        target = "UTF8_STRING" if mime == "text/plain" else mime
+        command = ["xclip", "-selection", "clipboard", "-t", target, "-i"]
+    else:
+        command = ["wl-copy", "--type", mime]
+    # Both fork a process that serves the selection and keeps stdout open, so
+    # do not wait for output - only for the command to take the data.
+    subprocess.run(command, input=data, stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, check=True, timeout=LOCAL_TIMEOUT)
 
 
 def wait_for(predicate, timeout=15, interval=0.5):

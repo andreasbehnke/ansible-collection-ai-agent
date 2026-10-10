@@ -1,22 +1,34 @@
 #!/usr/bin/env python3
 """Check Ctrl+C / Ctrl+V between this workstation and a Claude session on an operator host.
 
-Drives a REAL Claude Code on the host the way the operator uses it: started in tmux from a
-login shell of an "ssh -X" connection, used again after a NEW connection has replaced it.
-Keys, mouse drags and pastes are injected with "tmux send-keys" in the encoding the local
-terminal sends them (SGR mouse reports, bracketed paste), and results are read from the
-REAL local clipboard with wl-paste - so a PASS means the bytes reached this desktop, not a
-tmux buffer on the host. Cases, each before and after the reconnect:
+Drives a REAL Claude Code on the host the way the operator uses it. Keys, mouse drags and
+pastes are injected with "tmux send-keys" in the encoding a terminal sends them (SGR mouse
+reports, bracketed paste). Both clipboard routes the claude_operator role sets up are
+checked; see its README, section "Copy and paste".
+
+The X11 route (terminals without OSC 52, GNOME Terminal among them): Claude is started in
+tmux from a login shell of an "ssh -X" connection and used again after a NEW connection
+has replaced it. Results are read from the REAL local clipboard with wl-paste, so a PASS
+means the bytes reached this desktop, not a tmux buffer on the host. Cases, each before
+and after the reconnect:
 
   * terminal paste   - the terminal's Paste action reaches Claude's prompt
   * Ctrl+V           - an image on the local clipboard is pasted into the prompt
   * select + Ctrl+C  - a mouse selection in Claude lands on the local clipboard
 
+The OSC 52 route (kitty, WezTerm, foot, Alacritty, ...): Claude is started with NO X11
+forwarding at all. For each terminal type a real tmux client is attached over "ssh -tt"
+with that TERM, a selection is made, and the bytes tmux sends to the client must contain
+the clipboard escape "ESC ] 52 ; c ; <base64 of the selection>" - exactly what such a
+terminal turns into a clipboard write. The terminal's own acceptance of OSC 52 is its
+documented behaviour and not tested here.
+
 Standard library only, per the collection's tooling convention. Needs wl-copy/wl-paste
-locally (a Wayland session) and key based SSH to the operator account.
+locally (a Wayland session) for the X11 route and key based SSH to the operator account.
 
 Usage:
     ./check_clipboard.py <user>@<host> [--project <dir under ~/work>]
+    ./check_clipboard.py <user>@<host> --route osc52 --term xterm-kitty --term foot
     ./check_clipboard.py <user>@<host> --ssh-option ForwardX11Trusted=yes
 
 Nothing is ever submitted: the script never presses Enter, so no prompt reaches the model.
@@ -31,6 +43,7 @@ import secrets
 import shlex
 import subprocess
 import sys
+import threading
 import time
 
 SOCKET = "clipcheck"
@@ -40,6 +53,9 @@ SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ControlMast
             "-o", "ControlPath=none"]
 ESC = "\033"
 SHIM = "/usr/local/bin/xclip"
+# TERM values the OSC 52 route is checked with by default: what kitty, WezTerm, foot and
+# Alacritty set, plus xterm-256color, which many others (Ghostty, Konsole) fall back to.
+OSC52_TERMS = ["xterm-256color", "xterm-kitty", "wezterm", "foot", "alacritty"]
 # 1x1 PNG, the smallest image Claude Code accepts as a paste.
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ"
                        "DwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
@@ -60,6 +76,22 @@ class Host:
 
     def tmux(self, *args):
         return self.run(shlex.join(["tmux", "-L", SOCKET, *args]))
+
+    def attach(self, term):
+        """A tmux client attached over "ssh -tt" with the given TERM, WITHOUT X11.
+
+        Everything tmux writes to that terminal is collected in the returned buffer."""
+        client = subprocess.Popen(
+            ["ssh", "-x", "-tt", *SSH_OPTS, self.target,
+             f"TERM={shlex.quote(term)} exec tmux -L {SOCKET} attach -t {SESSION}"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        received = bytearray()
+
+        def pump():
+            for chunk in iter(lambda: client.stdout.read1(4096), b""):
+                received.extend(chunk)
+        threading.Thread(target=pump, daemon=True).start()
+        return client, received
 
     def connect(self, command):
         """A long lived "ssh -X" connection running a LOGIN shell, as an operator's would.
@@ -172,20 +204,52 @@ class Checker:
             self.report(f"select + Ctrl+C copies to the local clipboard ({label})", False,
                         "token never appeared in the prompt")
             return
-        row, col = position
-        first, last = col, col + len(token) - 1
-        # press, motion, release - SGR encoded, 1 based, as the terminal reports them
-        for event in (f"<0;{first};{row}M", f"<32;{(first + last) // 2};{row}M",
-                      f"<32;{last};{row}M", f"<0;{last};{row}m"):
-            self.host.tmux("send-keys", "-t", SESSION, "-l", ESC + "[" + event)
-            time.sleep(0.15)
-        time.sleep(0.5)
+        self.drag(position, len(token))
         self.host.tmux("send-keys", "-t", SESSION, "C-c")
         got = wait_for(lambda: local_clipboard() == token, timeout=5)
         self.report(f"select + Ctrl+C copies to the local clipboard ({label})", bool(got),
                     "" if got else f"local clipboard: {local_clipboard()!r}\n      "
                     + self.status_line())
         self.clear_prompt()
+
+    def drag(self, position, length):
+        """Select length cells from position with the mouse, as a terminal reports it."""
+        row, first = position
+        last = first + length - 1
+        # press, motion, release - SGR encoded, 1 based
+        for event in (f"<0;{first};{row}M", f"<32;{(first + last) // 2};{row}M",
+                      f"<32;{last};{row}M", f"<0;{last};{row}m"):
+            self.host.tmux("send-keys", "-t", SESSION, "-l", ESC + "[" + event)
+            time.sleep(0.15)
+        time.sleep(0.5)
+
+    def check_osc52_copy(self, term):
+        name = f"select copies as OSC 52 to a {term} client, no X11"
+        client, received = self.host.attach(term)
+        try:
+            attached = wait_for(lambda: term in self.host.tmux("list-clients"), timeout=10)
+            if not attached:
+                self.report(name, False, "client did not attach: "
+                            + received.decode(errors="replace").strip()[-200:])
+                return
+            token = "osc52-" + secrets.token_hex(6)
+            self.clear_prompt()
+            self.host.tmux("send-keys", "-t", SESSION, "-l", token)
+            position = wait_for(lambda: self.find(token))
+            if not position:
+                self.report(name, False, "token never appeared in the prompt")
+                return
+            self.drag(position, len(token))
+            self.host.tmux("send-keys", "-t", SESSION, "C-c")
+            sequence = b"]52;c;" + base64.b64encode(token.encode())
+            got = wait_for(lambda: sequence in received, timeout=5)
+            seen = re.findall(rb"\]52;[^;]*;", bytes(received))
+            self.report(name, bool(got), "" if got else
+                        f"OSC 52 sequences seen: {sorted(set(seen)) or 'none'}")
+            self.clear_prompt()
+        finally:
+            client.terminate()
+            client.wait()
 
     def check_all(self, label):
         self.check_text_paste(label)
@@ -209,7 +273,33 @@ class Checker:
         return "claude: (no clipboard notice on screen)"
 
     # ---- driver -----------------------------------------------------------
-    def run(self):
+    def start_claude(self):
+        ready = wait_for(lambda: self.prompt_line(), timeout=30)
+        if not ready:
+            print(self.screen())
+            raise RuntimeError("Claude did not reach its prompt")
+
+    def run_osc52(self, terms):
+        print("OSC 52 route - no X11 forwarding")
+        self.host.tmux("kill-server")
+        try:
+            self.host.tmux("new-session", "-d", "-s", SESSION, "-x", str(WIDTH),
+                           "-y", str(HEIGHT), "-c", f"/home/{self.user()}/work/{self.project}",
+                           "claude")
+            self.start_claude()
+            clipboard = self.host.tmux("show", "-sv", "set-clipboard").strip()
+            self.report("tmux set-clipboard on", clipboard == "on", f"set-clipboard={clipboard}")
+            self.check_text_paste("no X11")
+            for term in terms:
+                self.check_osc52_copy(term)
+        finally:
+            self.host.tmux("kill-server")
+
+    def user(self):
+        return self.host.run("id -un").strip()
+
+    def run_x11(self):
+        print("X11 route - ssh -X, reconnect")
         self.host.tmux("kill-server")
 
         cwd = f"~/work/{self.project}"
@@ -220,10 +310,7 @@ class Checker:
         try:
             display = read_display(first)
             print(f"      connection 1: DISPLAY={display or '(none - X11 forwarding refused)'}")
-            ready = wait_for(lambda: self.prompt_line(), timeout=30)
-            if not ready:
-                print(self.screen())
-                raise RuntimeError("Claude did not reach its prompt")
+            self.start_claude()
             print(f"      claude sees DISPLAY={self.claude_env('DISPLAY') or '(unset)'}")
             self.check_environment()
             self.check_all("first connection")
@@ -241,7 +328,6 @@ class Checker:
             for connection in (first, second):
                 if connection and connection.poll() is None:
                     connection.terminate()
-        return all(self.results)
 
 
 def main():
@@ -252,15 +338,24 @@ def main():
     parser.add_argument("--ssh-option", action="append", default=[], metavar="OPTION",
                         help="extra ssh -o option for the X11 connections, e.g."
                              " ForwardX11Trusted=no; repeatable")
+    parser.add_argument("--route", choices=["all", "x11", "osc52"], default="all",
+                        help="which clipboard route to check (default: all)")
+    parser.add_argument("--term", action="append", metavar="TERM",
+                        help="TERM to check the OSC 52 route with; repeatable"
+                             f" (default: {' '.join(OSC52_TERMS)})")
     args = parser.parse_args()
 
+    checker = Checker(Host(args.target, args.ssh_option), args.project)
     saved = local_clipboard()
     try:
-        ok = Checker(Host(args.target, args.ssh_option), args.project).run()
+        if args.route in ("all", "x11"):
+            checker.run_x11()
+        if args.route in ("all", "osc52"):
+            checker.run_osc52(args.term or OSC52_TERMS)
     finally:
         if saved is not None:
             set_local_clipboard(saved)
-    sys.exit(0 if ok else 1)
+    sys.exit(0 if all(checker.results) else 1)
 
 
 if __name__ == "__main__":

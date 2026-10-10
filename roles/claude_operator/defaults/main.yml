@@ -51,11 +51,14 @@
   # tmux keeps a session alive across an SSH disconnect and, unlike a service,
   # keeps a local terminal attached to it. git is what "claude --worktree" needs.
   # xclip and xauth carry the clipboard over SSH X11 forwarding, see below.
+  # kitty-terminfo: kitty sets TERM=xterm-kitty, which ncurses does not ship, and
+  # tmux refuses to attach a client whose terminal it cannot describe.
   claude_operator_packages:
     - tmux
     - git
     - xclip
     - xauth
+    - kitty-terminfo
 
   # ---- clipboard ----
   # Claude Code copies a selection (Ctrl+C) and pastes (Ctrl+V) through the

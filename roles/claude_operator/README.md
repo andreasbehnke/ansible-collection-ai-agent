@@ -108,6 +108,9 @@ claude-session <project> <worktree>   # new git worktree, in its own tmux sessio
 claude-session -r <project> [...]     # the same, with Remote Control enabled
 ```
 
+New to tmux? [TMUX_CHEAT_SHEET.md](TMUX_CHEAT_SHEET.md) has every key you need - detaching,
+switching sessions, scrolling Claude, copy mode, and the one key tmux takes away from Claude.
+
 It is thin on purpose. Claude Code already creates the worktree and the tmux session itself
 (`--worktree <name> --tmux=classic`); the wrapper resolves a project name to a directory, handles the
 multi repository case, and keeps the permission mode consistent.
@@ -254,6 +257,8 @@ false`.
 
 ### Both routes
 
+* The keys for all of this, tmux's copy mode included, are in
+  [TMUX_CHEAT_SHEET.md](TMUX_CHEAT_SHEET.md#copy-and-paste).
 * `/etc/tmux.conf` is read when a tmux server starts. A server already running before the role
   installed it picks it up with `tmux source-file /etc/tmux.conf`.
 * If your terminal binds Paste to Ctrl+V, give Claude Code's image paste another key in

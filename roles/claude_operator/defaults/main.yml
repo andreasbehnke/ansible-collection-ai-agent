@@ -50,9 +50,31 @@
   # ---- host packages ----
   # tmux keeps a session alive across an SSH disconnect and, unlike a service,
   # keeps a local terminal attached to it. git is what "claude --worktree" needs.
+  # xclip and xauth carry the clipboard over SSH X11 forwarding, see below.
   claude_operator_packages:
     - tmux
     - git
+    - xclip
+    - xauth
+
+  # ---- clipboard ----
+  # Claude Code copies a selection (Ctrl+C) and pastes (Ctrl+V) through the
+  # clipboard of the host it runs on: xclip, when DISPLAY is set. With "ssh -X"
+  # that display is the operator's own desktop, so both keys reach the local
+  # clipboard - the only route for a terminal without OSC 52, GNOME Terminal
+  # among them. A session outlives the connection it was started from, so an
+  # xclip shim in /usr/local/bin always uses the display of the operator's
+  # LATEST login, which a profile.d snippet and claude-session record.
+  claude_operator_x11_clipboard: true
+  claude_operator_xclip_shim_path: /usr/local/bin/xclip
+  claude_operator_xclip_bin: /usr/bin/xclip
+  claude_operator_x11_profile_path: /etc/profile.d/claude-session-display.sh
+  # The OSC 52 route, for terminals that implement it (kitty, WezTerm, foot,
+  # Alacritty, iTerm2): /etc/tmux.conf with "set-clipboard on", so a copy made
+  # inside tmux - by tmux itself or by a program in the pane - reaches the
+  # local clipboard. Does no harm under a terminal that ignores OSC 52.
+  claude_operator_tmux_osc52: true
+  claude_operator_tmux_conf_path: /etc/tmux.conf
 
   # ---- workspaces ----
   # Working trees live under ~/<dirname>, one directory per project, and they are

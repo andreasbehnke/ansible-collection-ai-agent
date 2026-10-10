@@ -13,6 +13,40 @@
     mode: "0755"
    when: claude_operator_session_bin | length > 0
 
+ # ---- clipboard ------------------------------------------------------------
+ # Ctrl+C / Ctrl+V in Claude Code use xclip on the forwarded X11 display. The
+ # shim shadows the real xclip (/usr/local/bin precedes /usr/bin) and follows
+ # the operator's latest login; the profile.d snippet records that login.
+ - name: install the xclip shim that follows the operator's current display
+   become: yes
+   ansible.builtin.template:
+    src: xclip-shim.j2
+    dest: "{{ claude_operator_xclip_shim_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+   when: claude_operator_x11_clipboard
+
+ - name: record every SSH login's forwarded display
+   become: yes
+   ansible.builtin.template:
+    src: profile-claude-session-display.sh.j2
+    dest: "{{ claude_operator_x11_profile_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+   when: claude_operator_x11_clipboard
+
+ - name: let tmux pass copies on to OSC 52 terminals
+   become: yes
+   ansible.builtin.template:
+    src: tmux.conf.j2
+    dest: "{{ claude_operator_tmux_conf_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+   when: claude_operator_tmux_osc52
+
  # Shown by pam_motd at every SSH login. Deliberately after the wrapper: the
  # banner executes it, so installing the banner first would briefly advertise a
  # command that is not there yet.

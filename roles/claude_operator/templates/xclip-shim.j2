@@ -1,0 +1,23 @@
+#!/bin/sh
+{{ ansible_managed | comment }}
+# xclip, but on the operator's CURRENT forwarded X11 display.
+#
+# Claude Code copies (Ctrl+C on a selection) and pastes (Ctrl+V) by running
+# xclip, with the DISPLAY it was started with. Under tmux that is the display of
+# whichever SSH connection started the session - long gone after a reconnect,
+# when the operator's desktop answers on a new display number. Every login
+# records its display (profile.d, and claude-session on attach); this shim runs
+# the real xclip on the latest one, so the clipboard follows the operator.
+#
+# Without a recorded display it is plain xclip.
+
+state="${XDG_CACHE_HOME:-$HOME/.cache}/claude-session/display"
+if [ -r "$state" ]; then
+  IFS= read -r display < "$state" || true
+  if [ -n "$display" ]; then
+    DISPLAY="$display"
+    export DISPLAY
+  fi
+fi
+
+exec {{ claude_operator_xclip_bin }} "$@"

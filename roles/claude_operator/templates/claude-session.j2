@@ -104,6 +104,20 @@ fi
 project="$1"; shift
 worktree="${1:-}"
 
+# ---- clipboard: the display this connection forwards ----------------------
+# Claude Code copies and pastes with xclip on DISPLAY, and only looks for xclip
+# at all when DISPLAY is set - once, for the life of the process. Record this
+# connection's display for the xclip shim, which follows the operator across
+# reconnects, and hand a session started without one the last one recorded.
+display_state="${XDG_CACHE_HOME:-$HOME/.cache}/claude-session/display"
+if [ -n "${DISPLAY:-}" ]; then
+  mkdir -p "${display_state%/*}"
+  printf '%s\n' "$DISPLAY" > "$display_state"
+elif [ -r "$display_state" ]; then
+  IFS= read -r DISPLAY < "$display_state" || true
+  export DISPLAY
+fi
+
 dir="$WORK/$project"
 if [ ! -d "$dir" ]; then
   printf 'claude-session: no such project: %s\n' "$dir" >&2

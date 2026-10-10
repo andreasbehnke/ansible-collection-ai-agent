@@ -1,0 +1,10 @@
+{{ ansible_managed | comment }}
+# System wide tmux defaults for the operator's Claude sessions. Personal
+# settings belong in ~/.tmux.conf, which tmux reads after this file.
+
+# OSC 52: let a copy made inside tmux - by tmux's copy mode or by a program in
+# the pane - set the clipboard of the terminal the operator sits at. Needs a
+# terminal that implements OSC 52 (kitty, WezTerm, foot, Alacritty, iTerm2);
+# GNOME Terminal does not and simply ignores it, which is why the X11 route
+# exists next to this one.
+set -s set-clipboard on

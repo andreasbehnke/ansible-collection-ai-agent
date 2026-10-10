@@ -1,0 +1,12 @@
+{{ ansible_managed | comment }}
+# Remember this login's forwarded X11 display, so the xclip shim
+# ({{ claude_operator_xclip_shim_path }}) can reach the operator's clipboard
+# from a Claude session started on an earlier connection. Only an SSH login with
+# X11 forwarding records anything: a login without it leaves the last display in
+# place rather than erasing it.
+if [ -n "${SSH_CONNECTION:-}" ] && [ -n "${DISPLAY:-}" ]; then
+  claude_session_state="${XDG_CACHE_HOME:-$HOME/.cache}/claude-session"
+  mkdir -p "$claude_session_state" 2>/dev/null \
+    && printf '%s\n' "$DISPLAY" > "$claude_session_state/display" 2>/dev/null
+  unset claude_session_state
+fi

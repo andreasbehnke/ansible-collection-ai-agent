@@ -41,6 +41,9 @@ anything else from the private infrastructure it is used from - examples use pla
     store
   * buzz/new_identity.py - generates the agent's Nostr keypair, self-testing its
     curve implementation against the BIP-340 vector before printing
+  * claude_operator/check_clipboard.py - proves copy and paste between the workstation
+    and a Claude session on an operator host, by driving a real Claude in tmux over
+    ssh -X and reading the local Wayland clipboard
 
 Role directories must be named lowercase with underscores; a role is referenced as
 `andreasbehnke.ai_agent.<role_name>`.

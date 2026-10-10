@@ -1,10 +1,24 @@
 {{ ansible_managed | comment }}
 # System wide tmux defaults for the operator's Claude sessions. Personal
-# settings belong in ~/.tmux.conf, which tmux reads after this file.
+# settings belong in ~/.tmux.conf, which tmux reads after this file. A tmux
+# server reads this only when it starts: "tmux source-file {{ claude_operator_tmux_conf_path }}"
+# applies it to one that is already running.
+{% if claude_operator_tmux_osc52 %}
 
 # OSC 52: let a copy made inside tmux - by tmux's copy mode or by a program in
 # the pane - set the clipboard of the terminal the operator sits at. Needs a
 # terminal that implements OSC 52 (kitty, WezTerm, foot, Alacritty, iTerm2);
-# GNOME Terminal does not and simply ignores it, which is why the X11 route
-# exists next to this one.
+# GNOME Terminal does not and simply ignores it.
 set -s set-clipboard on
+{% endif %}
+{% if claude_operator_x11_clipboard %}
+
+# The X11 route, for terminals without OSC 52. Over SSH, Claude Code never runs
+# xclip to copy: it hands a selection to "tmux load-buffer -w" and relies on
+# OSC 52. So tmux passes every loaded buffer on to the operator's forwarded
+# display as well, through the xclip shim that follows them across reconnects.
+# Without a forwarded display xclip fails quietly and nothing else changes.
+set-hook -g after-load-buffer 'run-shell -b "tmux save-buffer - | {{ claude_operator_xclip_shim_path }} -selection clipboard >/dev/null 2>&1"'
+# tmux's own copy mode, the same way.
+set -s copy-command '{{ claude_operator_xclip_shim_path }} -selection clipboard'
+{% endif %}

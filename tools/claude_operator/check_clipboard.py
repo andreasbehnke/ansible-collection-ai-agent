@@ -2,10 +2,15 @@
 """Check Ctrl+C / Ctrl+V between this workstation and a Claude session on an operator host.
 
 Drives a REAL Claude Code on the host the way the operator uses it: started in tmux from a
-login shell of an "ssh -X" connection, reattached later from a NEW connection. Keys and the
-mouse drag are injected with "tmux send-keys", in the same encoding the local terminal sends
-them (SGR mouse reports), and the result is read from the REAL local clipboard with
-wl-paste - so a PASS means the bytes reached this desktop, not a tmux buffer on the host.
+login shell of an "ssh -X" connection, used again after a NEW connection has replaced it.
+Keys, mouse drags and pastes are injected with "tmux send-keys" in the encoding the local
+terminal sends them (SGR mouse reports, bracketed paste), and results are read from the
+REAL local clipboard with wl-paste - so a PASS means the bytes reached this desktop, not a
+tmux buffer on the host. Cases, each before and after the reconnect:
+
+  * terminal paste   - the terminal's Paste action reaches Claude's prompt
+  * Ctrl+V           - an image on the local clipboard is pasted into the prompt
+  * select + Ctrl+C  - a mouse selection in Claude lands on the local clipboard
 
 Standard library only, per the collection's tooling convention. Needs wl-copy/wl-paste
 locally (a Wayland session) and key based SSH to the operator account.
@@ -19,6 +24,7 @@ previous local clipboard text back.
 """
 
 import argparse
+import base64
 import re
 import secrets
 import shlex
@@ -32,6 +38,10 @@ WIDTH, HEIGHT = 120, 40
 SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ControlMaster=no",
             "-o", "ControlPath=none"]
 ESC = "\033"
+SHIM = "/usr/local/bin/xclip"
+# 1x1 PNG, the smallest image Claude Code accepts as a paste.
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQ"
+                       "DwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 
 
 class Host:
@@ -65,12 +75,14 @@ def read_display(connection):
 
 
 def local_clipboard():
-    result = subprocess.run(["wl-paste", "--no-newline"], capture_output=True, text=True)
+    result = subprocess.run(["wl-paste", "--no-newline", "--type", "text"],
+                            capture_output=True, text=True)
     return result.stdout if result.returncode == 0 else None
 
 
-def set_local_clipboard(text):
-    subprocess.run(["wl-copy"], input=text, text=True, check=True)
+def set_local_clipboard(content, mime="text/plain"):
+    data = content.encode() if isinstance(content, str) else content
+    subprocess.run(["wl-copy", "--type", mime], input=data, check=True)
 
 
 def wait_for(predicate, timeout=15, interval=0.5):
@@ -114,20 +126,37 @@ class Checker:
 
     # ---- cases ------------------------------------------------------------
     def check_environment(self):
-        xclip = self.host.run("command -v xclip || true").strip()
-        self.report("xclip on the host", bool(xclip), xclip or "not installed")
+        xclip = self.host.run("bash -lc 'command -v xclip' || true").strip()
+        self.report("xclip resolves to the display following shim", xclip == SHIM,
+                    f"login shell finds: {xclip or '(nothing)'}")
+        hooks = self.host.tmux("show-hooks", "-g", "after-load-buffer")
+        self.report("tmux passes loaded buffers to xclip", "xclip" in hooks,
+                    hooks.strip() or "no after-load-buffer hook")
         clipboard = self.host.tmux("show", "-sv", "set-clipboard").strip()
         self.report("tmux set-clipboard on (OSC 52 terminals)", clipboard == "on",
                     f"set-clipboard={clipboard}")
 
-    def check_paste(self, label):
+    def check_text_paste(self, label):
+        """The bytes GNOME Terminal sends for its Paste action: a bracketed paste.
+
+        Claude Code has no text paste of its own - Ctrl+V is image paste only - so
+        text always comes from the terminal; this proves tmux and Claude take it."""
         token = "paste-" + secrets.token_hex(6)
-        set_local_clipboard(token)
+        self.clear_prompt()
+        self.host.tmux("send-keys", "-t", SESSION, "-l", f"{ESC}[200~{token}{ESC}[201~")
+        line = wait_for(lambda: token in self.prompt_line() and self.prompt_line(), timeout=8)
+        self.report(f"terminal paste reaches Claude ({label})", bool(line),
+                    "" if line else "prompt: " + self.prompt_line().strip())
+        self.clear_prompt()
+
+    def check_image_paste(self, label):
+        set_local_clipboard(PNG, mime="image/png")
         self.clear_prompt()
         self.host.tmux("send-keys", "-t", SESSION, "C-v")
-        line = wait_for(lambda: token in self.prompt_line() and self.prompt_line(), timeout=8)
-        self.report(f"Ctrl+V pastes the local clipboard ({label})", bool(line),
-                    line or "prompt: " + self.prompt_line().strip()
+        line = wait_for(lambda: "[Image" in self.prompt_line() and self.prompt_line(),
+                        timeout=10)
+        self.report(f"Ctrl+V pastes a local image ({label})", bool(line),
+                    "" if line else "prompt: " + self.prompt_line().strip()
                     + "\n      " + self.status_line())
         self.clear_prompt()
 
@@ -155,6 +184,11 @@ class Checker:
                     "" if got else f"local clipboard: {local_clipboard()!r}\n      "
                     + self.status_line())
         self.clear_prompt()
+
+    def check_all(self, label):
+        self.check_text_paste(label)
+        self.check_image_paste(label)
+        self.check_copy(label)
 
     def find(self, text):
         for index, line in enumerate(self.screen().splitlines()):
@@ -190,8 +224,7 @@ class Checker:
                 raise RuntimeError("Claude did not reach its prompt")
             print(f"      claude sees DISPLAY={self.claude_env('DISPLAY') or '(unset)'}")
             self.check_environment()
-            self.check_paste("first connection")
-            self.check_copy("first connection")
+            self.check_all("first connection")
 
             # The operator comes back later on a new connection - while the old one is
             # still open, so the display number really differs - and the old one ends.
@@ -200,8 +233,7 @@ class Checker:
             time.sleep(1)
             first.terminate()
             first.wait()
-            self.check_paste("after reconnect, same Claude process")
-            self.check_copy("after reconnect, same Claude process")
+            self.check_all("after reconnect, same Claude process")
         finally:
             self.host.tmux("kill-server")
             for connection in (first, second):

@@ -135,25 +135,81 @@ skips it.
 
 ## Copy and paste
 
-Claude Code's fullscreen renderer takes the mouse: dragging selects inside Claude Code and copies the
-selection at once (Ctrl+C copies it too), and Ctrl+V pastes an **image** from the clipboard. Both
-use the clipboard *of the host Claude Code runs on* - which a headless host does not have. Two
-details of Claude Code decide how that is bridged, both read from the binary and proven on a live
-host:
+**Short version:** use a terminal that implements OSC 52 (kitty, WezTerm, foot, Alacritty, Ghostty,
+iTerm2) and copy and paste work without any X11 forwarding - the one thing you give up is pasting
+*images* with Ctrl+V. GNOME Terminal and the other VTE based terminals do not implement OSC 52;
+for them the only route is SSH X11 forwarding, which has to be *trusted* on a Wayland desktop and
+gives the host considerably more than your clipboard. Both routes are installed by default and
+proven on a live host by `tools/claude_operator/check_clipboard.py`.
 
-* Over SSH (`SSH_CONNECTION` set) it never runs xclip to copy. It hands the selection to
-  `tmux load-buffer -w`, which only reaches the local clipboard as OSC 52.
-* Ctrl+V is image paste only (`chat:imagePaste`, via `xclip -t TARGETS`); Claude Code has no text
-  paste action. Text always comes from the terminal's own paste.
+### What Claude Code does
 
-So the role sets up two routes:
+Claude Code's fullscreen renderer takes the mouse. Dragging selects inside Claude Code and copies
+the selection at once (`copyOnSelect`); Ctrl+C on a selection copies it too. Ctrl+V pastes an
+**image** from the clipboard. All of it uses the clipboard *of the host Claude Code runs on* - which
+a headless host does not have. Three details, read from the binary and confirmed on a live host,
+decide how that is bridged:
 
-| Terminal | Copy (select / Ctrl+C) | Paste text | Paste image (Ctrl+V) |
+* **Copy over SSH never uses xclip.** With `SSH_CONNECTION` set, Claude Code skips the native
+  clipboard tools even when xclip and a `DISPLAY` are present. Inside tmux it runs
+  `tmux load-buffer -w -`, and also writes its own OSC 52 sequence (`ESC ] 52 ; c ; <base64>`) to
+  the pane.
+* **Ctrl+V is image paste only** (`chat:imagePaste`). It asks `xclip -selection clipboard
+  -t TARGETS` whether the host's clipboard holds an image. Claude Code has no text paste action: text
+  always comes from the terminal's own paste, which arrives as a bracketed paste and works through
+  tmux without any help.
+* **Shift+drag** bypasses Claude Code's mouse handling and gives the terminal's own selection,
+  limited to what is on screen. That is independent of both routes below.
+
+| | Copy (select / Ctrl+C) | Paste text | Paste image (Ctrl+V) |
 |---|---|---|---|
-| With OSC 52 (kitty, WezTerm, foot, Alacritty, iTerm2) | tmux `set-clipboard on` passes Claude Code's copy on as OSC 52 | the terminal's paste | needs the X11 route |
-| Without OSC 52 (GNOME Terminal and other VTE terminals) | X11 route | the terminal's paste | X11 route |
+| **OSC 52 route** - kitty, WezTerm, foot, Alacritty, Ghostty, iTerm2 | ✓ tmux forwards it as OSC 52 | ✓ terminal paste | ✗ - copy the file to the host and give Claude Code its path |
+| **X11 route** - GNOME Terminal, other VTE terminals, anything without OSC 52 | ✓ tmux hook → xclip → your desktop | ✓ terminal paste | ✓ xclip reads your desktop's clipboard |
 
-**The X11 route.** Connect with X11 forwarding, so the host gets a `DISPLAY` that is your own desktop:
+### The OSC 52 route - no X11 needed
+
+OSC 52 is an escape sequence by which a program asks the terminal to set the clipboard. It travels
+in-band over the SSH connection, like any other output. The terminal decides whether to obey it, and
+the host never gets to read your clipboard through it.
+
+What the role does: `/etc/tmux.conf` sets `set-clipboard on`. That setting matters. With tmux's
+default (`external`) the terminal only receives the sequence from `load-buffer -w`, which tmux sends
+with an **empty** selection parameter (`ESC ] 52 ; ; …`), and terminals disagree about what empty
+means - xterm's own reading is "primary selection and cut buffer 0", not the clipboard. With `on`,
+tmux also forwards Claude Code's own explicit `ESC ] 52 ; c ; …`, which every OSC 52 terminal writes
+to the clipboard.
+
+tmux only sends OSC 52 to a client whose terminal description says it can take it (the `Ms`
+capability, or the `clipboard` terminal feature for `xterm*`), so the host needs terminfo for your
+`TERM`. ncurses on Debian and Ubuntu ships `foot`, `alacritty`, `wezterm` and `xterm-256color`, all
+with `Ms`; the role adds `kitty-terminfo` for kitty's `xterm-kitty`, without which tmux refuses to
+attach at all (*"missing or unsuitable terminal: xterm-kitty"*).
+
+What you do, on the workstation:
+
+* **Do not forward X11** to the host. Remove any `ForwardX11` entry for it, or set
+  `ForwardX11 no` explicitly - Debian's `ssh_config` does not forward by default.
+* Make sure the terminal accepts clipboard **writes** via OSC 52. The defaults at the time of
+  writing:
+  * kitty - allowed (`clipboard_control` includes `write-clipboard`)
+  * WezTerm, foot - allowed
+  * Alacritty - allowed (`terminal.osc52 = "OnlyCopy"`)
+  * Ghostty - allowed (`clipboard-write = allow`). Its `TERM` is `xterm-ghostty`, which Ubuntu
+    24.04 does not ship; enable Ghostty's `ssh-terminfo` (or `ssh-env`) shell integration feature, or
+    connect with `TERM=xterm-256color ssh <host>`.
+  * iTerm2 - **off**; enable *Settings → General → Selection → Applications in terminal may access
+    clipboard*.
+* Paste text with the terminal's own paste shortcut. If you bind it to Ctrl+V, Claude Code's image
+  paste never sees the key - which costs nothing on this route, since image paste cannot work here
+  anyway.
+
+What OSC 52 allows: every program running in a pane on the host can **write** your clipboard, not
+read it. The realistic risk is a planted clipboard - copy something, and paste something else - so
+look at what you paste into a local shell. Compared with X11 forwarding it is a small grant.
+
+### The X11 route - for terminals without OSC 52
+
+Connect with X11 forwarding, so the host gets a `DISPLAY` that is your own desktop:
 
 ```
 Host <host>
@@ -162,38 +218,62 @@ Host <host>
   ForwardX11Timeout 0
 ```
 
-It has to be **trusted** forwarding on a Wayland desktop: untrusted forwarding needs the X SECURITY
-extension, which XWayland does not have, and ssh then refuses it with *"untrusted X11 forwarding
-setup failed: xauth key data not generated"*. Debian's `/etc/ssh/ssh_config` already defaults to
-trusted, so plain `ssh -X` works there. Know what it grants: while you are connected the host has
-full access to your XWayland server - your clipboard, and the windows and keystrokes of X11
-applications. Wayland-native applications, GNOME Terminal among them, are out of its reach. Enable
-it only for hosts you trust as much as your desktop. `ForwardX11Timeout 0` keeps forwarding open for
-the whole connection rather than refusing new X connections after twenty minutes.
+**It has to be trusted forwarding on a Wayland desktop.** Untrusted forwarding needs the X SECURITY
+extension, which XWayland does not have, and ssh refuses it with *"untrusted X11 forwarding setup
+failed: xauth key data not generated"*. Debian's `/etc/ssh/ssh_config` already defaults to trusted,
+so plain `ssh -X` works there. `ForwardX11Timeout 0` keeps forwarding open for the whole connection.
 
-On the host a tmux hook (`after-load-buffer`) passes every buffer Claude Code loads on to
-`xclip -selection clipboard`, and Claude Code's own image paste runs xclip as well. A tmux session
-outlives the SSH connection it was started from, and a reconnect lands on a new display number, so
-`/usr/local/bin/xclip` is a shim: it runs the real xclip on the display of your **latest** login,
-which `/etc/profile.d/claude-session-display.sh` and `claude-session` record in
-`~/.cache/claude-session/display`.
+**What trusted forwarding grants.** While you are connected, any process on the host running as
+you - Claude Code and every command it runs included - is a full X11 client of your XWayland
+server. It can:
 
-Things to know:
+* read your clipboard at any moment, not only when you paste;
+* watch and inject keystrokes, and capture the windows, of every X11 application on your desktop
+  (Wayland-native applications, GNOME Terminal among them, are out of its reach);
+* open windows on your screen.
 
-* `/etc/tmux.conf` is read when a tmux server starts. Sessions already running before the role
-  installed it get it with `tmux source-file /etc/tmux.conf`.
-* GNOME Terminal pastes with Ctrl+Shift+V. To paste text with Ctrl+V, give the terminal's *Paste*
-  action that shortcut (Preferences → Shortcuts); Ctrl+V then no longer reaches the remote program, so
-  bind Claude Code's image paste to another key in `~/.claude/keybindings.json`
-  (`{"context": "Chat", "bindings": {"alt+v": "chat:imagePaste"}}`).
-* Shift+drag still gives the terminal's own selection, limited to what is on screen.
+A host that holds a full scope Claude credential and runs an agent with shell access is exactly the
+kind of host where that matters - a prompt injection that reaches a shell can reach your clipboard.
+Enable it only for a host you trust as much as your desktop, or switch to an OSC 52 terminal.
+
+What the role does on the host:
+
+* A tmux hook, `after-load-buffer`, passes every buffer loaded into tmux - Claude Code's copies
+  among them - to `xclip -selection clipboard`; `copy-command` does the same for tmux's own copy
+  mode. Claude Code's image paste runs xclip directly.
+* A tmux session outlives the SSH connection it was started from, and a reconnect lands on a new
+  display number. So `/usr/local/bin/xclip` is a shim that runs the real xclip on the display of
+  your **latest** login, which `/etc/profile.d/claude-session-display.sh` and `claude-session` record
+  in `~/.cache/claude-session/display`.
 * An X11 copy lives as long as the connection: xclip serves it from the host, so a selection copied
   just before disconnecting may be gone afterwards.
 
-`tools/claude_operator/check_clipboard.py <user>@<host>` proves all of it against the real host. It
-starts Claude Code in tmux from an `ssh -X` login shell, injects the keys, mouse drags and bracketed
-pastes your terminal would send, reconnects on a second display, and compares the result with your
-local Wayland clipboard.
+Without a forwarded display all of this is inert: xclip fails quietly and nothing else changes. To
+drop it entirely on a host meant for OSC 52 terminals only, set `claude_operator_x11_clipboard:
+false`.
+
+### Both routes
+
+* `/etc/tmux.conf` is read when a tmux server starts. A server already running before the role
+  installed it picks it up with `tmux source-file /etc/tmux.conf`.
+* If your terminal binds Paste to Ctrl+V, give Claude Code's image paste another key in
+  `~/.claude/keybindings.json`: `{"bindings": [{"context": "Chat", "bindings": {"alt+v":
+  "chat:imagePaste"}}]}`.
+
+### Proving it
+
+```console
+$ tools/claude_operator/check_clipboard.py <user>@<host>
+$ tools/claude_operator/check_clipboard.py <user>@<host> --route osc52 --term xterm-ghostty
+```
+
+The check drives a real Claude Code on the host and never submits a prompt. For the X11 route it
+starts Claude Code from an `ssh -X` login shell, injects the keys, mouse drags and bracketed pastes a
+terminal sends, reconnects on a second display, and compares the result with your local Wayland
+clipboard. For the OSC 52 route it starts Claude Code with no X11 at all, attaches a real tmux
+client over `ssh -tt` for each `TERM`, makes a selection, and asserts that the client receives
+`ESC ] 52 ; c ; <base64 of the selection>`. Whether the terminal then honours that sequence is the
+terminal's documented behaviour, listed above.
 
 ## Variables
 
@@ -206,7 +286,7 @@ local Wayland clipboard.
 | `claude_operator_install_node` | `true` | Install node from the NodeSource repository. Set to false to provide it yourself; the role then only asserts the version |
 | `claude_operator_node_version` | `"26"` | Required node major version |
 | `claude_operator_node_bin` / `claude_operator_npm_bin` | `/usr/bin/node` / `/usr/bin/npm` | Absolute interpreter paths. Bare names resolve through PATH, where `/usr/local/bin` wins and another package's private node can shadow the pinned one |
-| `claude_operator_packages` | `[tmux, git, xclip, xauth]` | Host packages the operator's sessions need. `tmux` keeps a session alive across an SSH disconnect, `git` is what `--worktree` needs, `xclip` and `xauth` carry the clipboard over X11 forwarding |
+| `claude_operator_packages` | `[tmux, git, xclip, xauth, kitty-terminfo]` | Host packages the operator's sessions need. `tmux` keeps a session alive across an SSH disconnect, `git` is what `--worktree` needs, `xclip` and `xauth` carry the clipboard over X11 forwarding, `kitty-terminfo` lets a kitty client attach to tmux |
 | `claude_operator_x11_clipboard` | `true` | Clipboard over SSH X11 forwarding: the xclip shim, the profile.d snippet and the tmux hook. See [Copy and paste](#copy-and-paste) |
 | `claude_operator_xclip_shim_path` / `claude_operator_xclip_bin` | `/usr/local/bin/xclip` / `/usr/bin/xclip` | The shim, which must precede the real xclip on PATH, and the real one it runs |
 | `claude_operator_x11_profile_path` | `/etc/profile.d/claude-session-display.sh` | Records every SSH login's forwarded display |

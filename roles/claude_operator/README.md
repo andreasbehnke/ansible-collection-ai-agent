@@ -158,14 +158,18 @@ So the role sets up two routes:
 ```
 Host <host>
   ForwardX11 yes
+  ForwardX11Trusted yes
   ForwardX11Timeout 0
 ```
 
-`ForwardX11Timeout 0` matters: untrusted forwarding (the default, and sufficient here) otherwise
-refuses new X connections after twenty minutes, and the clipboard stops working mid session. On a
-Wayland desktop the forwarded client reaches only XWayland - still, X11 forwarding lets the host
-read your clipboard whenever you are connected, so enable it only for hosts you trust as much as
-your desktop.
+It has to be **trusted** forwarding on a Wayland desktop: untrusted forwarding needs the X SECURITY
+extension, which XWayland does not have, and ssh then refuses it with *"untrusted X11 forwarding
+setup failed: xauth key data not generated"*. Debian's `/etc/ssh/ssh_config` already defaults to
+trusted, so plain `ssh -X` works there. Know what it grants: while you are connected the host has
+full access to your XWayland server - your clipboard, and the windows and keystrokes of X11
+applications. Wayland-native applications, GNOME Terminal among them, are out of its reach. Enable
+it only for hosts you trust as much as your desktop. `ForwardX11Timeout 0` keeps forwarding open for
+the whole connection rather than refusing new X connections after twenty minutes.
 
 On the host a tmux hook (`after-load-buffer`) passes every buffer Claude Code loads on to
 `xclip -selection clipboard`, and Claude Code's own image paste runs xclip as well. A tmux session

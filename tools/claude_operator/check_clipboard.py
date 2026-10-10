@@ -17,6 +17,7 @@ locally (a Wayland session) and key based SSH to the operator account.
 
 Usage:
     ./check_clipboard.py <user>@<host> [--project <dir under ~/work>]
+    ./check_clipboard.py <user>@<host> --ssh-option ForwardX11Trusted=yes
 
 Nothing is ever submitted: the script never presses Enter, so no prompt reaches the model.
 It runs on a private tmux socket (-L clipcheck), kills that server when done and puts the
@@ -45,8 +46,9 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4
 
 
 class Host:
-    def __init__(self, target):
+    def __init__(self, target, ssh_options=()):
         self.target = target
+        self.ssh_options = [arg for option in ssh_options for arg in ("-o", option)]
 
     def run(self, command, check=False):
         """One shot command, WITHOUT X11 forwarding."""
@@ -64,7 +66,7 @@ class Host:
 
         The X11 display it gets lives exactly as long as this process."""
         script = f"echo DISPLAY=$DISPLAY; {command}; exec sleep 3600"
-        return subprocess.Popen(["ssh", "-X", *SSH_OPTS, self.target,
+        return subprocess.Popen(["ssh", "-X", *SSH_OPTS, *self.ssh_options, self.target,
                                  "bash -lc " + shlex.quote(script)],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
@@ -247,11 +249,14 @@ def main():
     parser.add_argument("target", help="<user>@<host> of the operator account")
     parser.add_argument("--project", default="platform",
                         help="trusted directory under ~/work to start Claude in")
+    parser.add_argument("--ssh-option", action="append", default=[], metavar="OPTION",
+                        help="extra ssh -o option for the X11 connections, e.g."
+                             " ForwardX11Trusted=no; repeatable")
     args = parser.parse_args()
 
     saved = local_clipboard()
     try:
-        ok = Checker(Host(args.target), args.project).run()
+        ok = Checker(Host(args.target, args.ssh_option), args.project).run()
     finally:
         if saved is not None:
             set_local_clipboard(saved)

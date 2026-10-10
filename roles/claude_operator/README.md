@@ -5,8 +5,8 @@ interactively over SSH, and from a phone or browser through
 [Remote Control](https://code.claude.com/docs/en/remote-control).
 
 It installs a pinned Claude Code, creates one login account per human operator with a workspace root
-for long lived working trees, and installs `claude-session`, a small wrapper over Claude Code's own
-`--worktree` / `--tmux` / `--remote-control` flags.
+for long lived working trees, and installs `claude-session`, a small wrapper that runs Claude Code in tmux with its own
+`--worktree` / `--remote-control` flags.
 
 It deliberately runs **no service and opens no port**. Remote Control is an outbound HTTPS
 connection; the only listener on such a host is `sshd`.
@@ -111,9 +111,15 @@ claude-session -r <project> [...]     # the same, with Remote Control enabled
 New to tmux? [TMUX_CHEAT_SHEET.md](TMUX_CHEAT_SHEET.md) has every key you need - detaching,
 switching sessions, scrolling Claude, copy mode, and the one key tmux takes away from Claude.
 
-It is thin on purpose. Claude Code already creates the worktree and the tmux session itself
-(`--worktree <name> --tmux=classic`); the wrapper resolves a project name to a directory, handles the
-multi repository case, and keeps the permission mode consistent.
+It is thin on purpose. Claude Code creates the worktree itself (`--worktree <name>`); the wrapper
+resolves a project name to a directory, handles the multi repository case, keeps the permission mode
+consistent, and runs the tmux session Claude lives in.
+
+It does **not** use Claude Code's own `--tmux`. That runs the tmux client as a child of a Claude
+process which outlives a detach: `Ctrl-b d` then leaves a blinking cursor instead of the shell
+prompt until you press Ctrl-C. The wrapper execs tmux itself, with the session name
+(`<repository>_worktree-<name>`) and environment `--tmux` would use, so sessions started either way
+are found again.
 
 **Multi repository projects.** If the project directory is itself a git repository, that is the
 session's working directory. If it *contains* repositories, the first is the working directory and

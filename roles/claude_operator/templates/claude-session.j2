@@ -2,10 +2,10 @@
 {{ ansible_managed | comment }}
 # Start or reattach a Claude Code session that survives an SSH disconnect.
 #
-# This is a thin wrapper, on purpose. Claude Code already creates git worktrees
-# and tmux sessions itself ("--worktree", "--tmux"), so the wrapper only resolves
-# a project name to a directory, works out the multi repository case, and keeps
-# the permission mode consistent. Everything else is upstream's.
+# This is a thin wrapper, on purpose. Claude Code creates git worktrees itself
+# ("--worktree"), so the wrapper only resolves a project name to a directory,
+# works out the multi repository case, keeps the permission mode consistent and
+# runs the tmux session Claude lives in.
 #
 # There is no systemd unit on this host and that is deliberate: a
 # "claude remote-control" server has no local terminal, and an always running one
@@ -148,16 +148,32 @@ if [ "${#add_dirs[@]}" -gt 0 ]; then
   args+=("${add_dirs[@]}")
 fi
 
-# ---- a worktree of its own: Claude Code makes both the tree and the session -
+# ---- a worktree of its own: Claude Code makes the tree, tmux the session ----
+# Not "claude --worktree --tmux": that runs the tmux client as a CHILD of a
+# Claude process, which outlives a detach - Ctrl-b d then leaves a blinking
+# cursor until Ctrl-C. So tmux is exec'ed here, as for the project session,
+# and Claude runs inside it, making or reusing the worktree. The session name
+# and environment are the ones "--tmux" uses, so sessions it started are still
+# found and Claude still knows which of its keys the tmux prefix takes.
 if [ -n "$worktree" ]; then
   if [ ! -e "$cwd/.git" ]; then
     printf 'claude-session: not a git repository, so it cannot be branched: %s\n' "$cwd" >&2
     exit 1
   fi
-  cd "$cwd"
-  # --tmux=classic, not bare --tmux: the default prefers iTerm2 native panes,
-  # which do not exist on a headless host.
-  exec "$CLAUDE" --worktree "$worktree" --tmux=classic "${args[@]}"
+  session="$(basename "$cwd")_worktree-$worktree"
+  session="${session//[\/.]/_}"
+  prefix="$(tmux show-options -gv prefix 2>/dev/null || true)"
+  prefix="${prefix:-C-b}"
+  case "$prefix" in
+    C-b|C-c|C-d|C-t|C-o|C-r|C-s|C-g|C-e) conflicts=1 ;;
+    *) conflicts= ;;
+  esac
+  command_line="$(printf '%q ' "$CLAUDE" --worktree "$worktree" "${args[@]}")"
+  exec tmux new-session -A -s "$session" -c "$cwd" \
+    -e "CLAUDE_CODE_TMUX_SESSION=$session" \
+    -e "CLAUDE_CODE_TMUX_PREFIX=$prefix" \
+    -e "CLAUDE_CODE_TMUX_PREFIX_CONFLICTS=$conflicts" \
+    "$command_line"
 fi
 
 # ---- the project's own session --------------------------------------------

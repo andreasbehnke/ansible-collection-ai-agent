@@ -81,3 +81,26 @@
    loop: "{{ claude_operator_users }}"
    loop_control:
     label: "{{ item.name }}"
+
+ # The key git over ssh authenticates with. Generated as the account itself, so
+ # the private half is never anywhere but the operator's own ~/.ssh. "creates"
+ # keeps a key the operator made or replaced by hand.
+ - name: generate the operators' ssh keys
+   become: yes
+   become_user: "{{ item.name }}"
+   ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -q
+      - -t
+      - "{{ claude_operator_ssh_key_type }}"
+      - -N
+      - ""
+      - -C
+      - "{{ item.name }}@{{ inventory_hostname }}"
+      - -f
+      - "/home/{{ item.name }}/.ssh/id_{{ claude_operator_ssh_key_type }}"
+    creates: "/home/{{ item.name }}/.ssh/id_{{ claude_operator_ssh_key_type }}"
+   loop: "{{ claude_operator_users }}"
+   loop_control:
+    label: "{{ item.name }}"

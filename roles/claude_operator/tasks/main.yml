@@ -6,6 +6,8 @@
  - include_tasks: install.yml
  - include_tasks: users.yml
  - include_tasks: workspace.yml
+ - include_tasks: pass.yml
+   when: claude_operator_users | selectattr('pass_repository', 'defined') | selectattr('pass_repository') | list | length > 0
  # Runs last: it renders the operator wrapper and reports which accounts still
  # need the one step this role cannot perform, so that message is the last thing
  # on screen rather than scrolled away.

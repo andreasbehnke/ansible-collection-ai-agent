@@ -16,6 +16,12 @@
   # default because this repository is public - the composing playbook supplies
   # the accounts and their keys.
   claude_operator_users: []
+  # An entry may also carry "pass_repository", the git URL of that operator's
+  # password store (see "password store" below):
+  #   claude_operator_users:
+  #     - name: alice
+  #       authorized_keys: [...]
+  #       pass_repository: ssh://alice@git.example.org/srv/git/credentials.git
 
   # ---- claude code ----
   # Pinned, like every upstream release in this collection. The floor is higher
@@ -78,6 +84,28 @@
   # local clipboard. Does no harm under a terminal that ignores OSC 52.
   claude_operator_tmux_osc52: true
   claude_operator_tmux_conf_path: /etc/tmux.conf
+
+  # ---- ssh ----
+  # Every account gets an ed25519 key pair of its own (~/.ssh/id_ed25519), so
+  # git over ssh works from the host. Generated on the host and never copied off
+  # it: the role only ever reports the public half, which belongs in the git
+  # server's authorized keys. An existing key is left alone.
+  claude_operator_ssh_key_type: ed25519
+
+  # ---- password store ----
+  # Optional, per account: an operator entry with "pass_repository" gets pass and
+  # gnupg, and the store cloned to ~/<dirname> over ssh. The private gpg key is
+  # NOT provisioned - it is the one secret the store hinges on and is imported by
+  # hand (see README, "Password store"). The role reports what is still missing.
+  claude_operator_pass_packages:
+    - pass
+    - gnupg
+    # gpg-agent asks for the passphrase on the terminal: there is no desktop.
+    - pinentry-curses
+  # pass' own default. Anything else is exported as PASSWORD_STORE_DIR by the
+  # profile.d snippet below.
+  claude_operator_pass_dirname: .password-store
+  claude_operator_pass_profile_path: /etc/profile.d/claude-operator-pass.sh
 
   # ---- workspaces ----
   # Working trees live under ~/<dirname>, one directory per project, and they are

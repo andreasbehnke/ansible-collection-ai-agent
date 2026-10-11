@@ -1,0 +1,13 @@
+{{ ansible_managed | comment }}
+{% if claude_operator_pass_dirname != '.password-store' %}
+# The operator's password store lives in ~/{{ claude_operator_pass_dirname }}, not pass' default
+# ~/.password-store.
+export PASSWORD_STORE_DIR="$HOME/{{ claude_operator_pass_dirname }}"
+{% endif %}
+# pinentry-curses asks on the terminal gpg runs on, and gpg only knows that
+# terminal from GPG_TTY. Every tmux window is a login shell of its own, so each
+# one sets its own.
+if tty -s; then
+  GPG_TTY="$(tty)"
+  export GPG_TTY
+fi

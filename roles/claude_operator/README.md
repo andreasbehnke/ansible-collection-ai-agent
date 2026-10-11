@@ -88,6 +88,8 @@ Raise the pin in `claude_operator_claude_version` when you want the new version.
 | `/home/<operator>` | operator | `0700` | Home. Several operators have no business reading each other's |
 | `/home/<operator>/.claude` | operator | `0700` | **The credential and every transcript.** Created by Claude Code with the login user's umask (so it lands `0775`); the role re-asserts `0700` once it exists, but never creates it — its existence is what tells the role the account has signed in |
 | `/home/<operator>/work` | operator | `0755` | Workspace root, one directory per project |
+| `/home/<operator>/.ssh/id_ed25519` | operator | `0600` | The account's own ssh key, for git over ssh. Generated on the host, never copied off it |
+| `/home/<operator>/.password-store` | operator | | The password store, cloned when the account has a `pass_repository` |
 
 The workspace root is deliberately **not** the home directory. The startup trust dialog never saves
 trust for a home directory, so a session started there can never satisfy the workspace trust
@@ -286,11 +288,50 @@ client over `ssh -tt` for each `TERM`, makes a selection, and asserts that the c
 `ESC ] 52 ; c ; <base64 of the selection>`. Whether the terminal then honours that sequence is the
 terminal's documented behaviour, listed above.
 
+## Password store
+
+An operator entry may carry `pass_repository`, the git URL of that operator's
+[pass](https://www.passwordstore.org/) store:
+
+```yaml
+claude_operator_users:
+  - name: alice
+    authorized_keys: [...]
+    pass_repository: ssh://alice@git.example.org/srv/git/credentials.git
+```
+
+The role then installs `pass`, `gnupg` and `pinentry-curses`, sets `GPG_TTY` (and `PASSWORD_STORE_DIR`, if the
+store is not at pass' default `~/.password-store`) for login shells (`/etc/profile.d/claude-operator-pass.sh`) and clones the store as the
+operator, over ssh with the account's own key. The git server's host key is trusted on first contact
+and a changed one is refused. The clone is never updated afterwards - `pass git pull` is the
+operator's.
+
+Two steps belong to someone else, and the role reports them rather than failing:
+
+1. **Authorising the ssh key at the git server.** On the first run the clone is refused; the report
+   prints the account's public key. Add it to the server's authorized keys and run the role again.
+2. **The secret gpg key.** It is the one secret the store hinges on, so it never passes through
+   Ansible. Import it by hand and mark it trusted - `pass insert` refuses to encrypt to a key of
+   unknown trust:
+
+```console
+$ gpg --export-secret-keys --armor <id> | ssh <operator>@<host> gpg --import
+$ ssh -t <operator>@<host> gpg --edit-key <id> trust   # 5, ultimate
+```
+
+Claude Code's Bash tool has no terminal, so pinentry cannot ask it for the passphrase. Unlock the key
+once from a terminal (`pass show <any entry>` in a tmux window); the sessions then use gpg-agent's
+cached passphrase until it expires.
+
 ## Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `claude_operator_users` | `[]` | Login accounts: a list of `{name, authorized_keys}`. Empty by default because this repository is public - the composing playbook supplies them |
+| `claude_operator_users` | `[]` | Login accounts: a list of `{name, authorized_keys}`, optionally with `pass_repository`. Empty by default because this repository is public - the composing playbook supplies them |
+| `claude_operator_ssh_key_type` | `ed25519` | Type of the ssh key generated for every account. An existing key is left alone |
+| `claude_operator_pass_packages` | `[pass, gnupg, pinentry-curses]` | Installed when any account has a `pass_repository` |
+| `claude_operator_pass_dirname` | `.password-store` | Where the store is cloned, relative to each home. pass' own default; anything else is exported as `PASSWORD_STORE_DIR` |
+| `claude_operator_pass_profile_path` | `/etc/profile.d/claude-operator-pass.sh` | Sets `GPG_TTY`, and `PASSWORD_STORE_DIR` for a non default store |
 | `claude_operator_claude_version` | `"2.1.238"` | Pinned Claude Code release. The floor is higher than it looks: reconnect after a stale token needs 2.1.224, effort control from a device needs 2.1.234 |
 | `claude_operator_npm_prefix` | `/usr/local` | npm `--prefix` for the global install |
 | `claude_operator_bin` | `/usr/local/bin/claude` | The installed launcher |

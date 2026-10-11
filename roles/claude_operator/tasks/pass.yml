@@ -1,0 +1,126 @@
+---
+
+ # Optional, per account: pass and gnupg, and the operator's password store
+ # cloned over ssh with the key users.yml generated. The role stops short of the
+ # private gpg key - the one secret the store hinges on - and of authorising the
+ # ssh key at the git server, which is another host's configuration. It reports
+ # both instead, like the claude login in session.yml.
+
+ - name: collect the accounts with a password store
+   ansible.builtin.set_fact:
+    claude_operator_pass_users: "{{ claude_operator_users | selectattr('pass_repository', 'defined') | selectattr('pass_repository') | list }}"
+
+ # Without recommends: pass recommends wl-clipboard, which pulls in mesa and
+ # llvm on a host that has no display. git and xclip are installed anyway.
+ - name: install pass and gnupg
+   become: yes
+   ansible.builtin.apt:
+    name: "{{ claude_operator_pass_packages }}"
+    state: present
+    install_recommends: no
+    update_cache: yes
+
+ - name: point pass at the store and gpg at the terminal
+   become: yes
+   ansible.builtin.template:
+    src: profile-claude-operator-pass.sh.j2
+    dest: "{{ claude_operator_pass_profile_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+ - name: check which password stores are cloned
+   become: yes
+   ansible.builtin.stat:
+    path: "/home/{{ item.name }}/{{ claude_operator_pass_dirname }}/.git"
+   loop: "{{ claude_operator_pass_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+   register: claude_operator_pass_stores
+
+ # Cloned once and never updated: the store is the operator's working copy, and
+ # "pass git pull" is theirs to run. accept_newhostkey trusts the git server's
+ # host key on first contact and refuses a changed one, as accept-new does.
+ # failed_when: false because the usual first-run failure - the new ssh key is
+ # not yet authorised at the git server - is reported below, not fatal.
+ - name: clone the password stores
+   become: yes
+   become_user: "{{ item.item.name }}"
+   ansible.builtin.git:
+    repo: "{{ item.item.pass_repository }}"
+    dest: "/home/{{ item.item.name }}/{{ claude_operator_pass_dirname }}"
+    accept_newhostkey: yes
+    update: no
+   loop: "{{ claude_operator_pass_stores.results }}"
+   loop_control:
+    label: "{{ item.item.name }}"
+   when: not item.stat.exists
+   register: claude_operator_pass_clones
+   failed_when: false
+
+ - name: read the operators' public ssh keys
+   become: yes
+   ansible.builtin.slurp:
+    src: "/home/{{ item.item.item.name }}/.ssh/id_{{ claude_operator_ssh_key_type }}.pub"
+   loop: "{{ claude_operator_pass_clones.results }}"
+   loop_control:
+    label: "{{ item.item.item.name }}"
+   # failed_when: false clears "failed", so a failed clone is the one that ran
+   # and reports no "after" commit.
+   when: item.skipped is not defined and item.after is not defined
+   register: claude_operator_pass_pubkeys
+
+ - name: report the password stores that could not be cloned
+   ansible.builtin.debug:
+    msg: >-
+      Could not clone {{ item.item.item.item.pass_repository }} to
+      /home/{{ item.item.item.item.name }}/{{ claude_operator_pass_dirname }}:
+      {{ item.item.msg | default('') | trim }}
+      If the git server refused the key, authorise this public key there and
+      run the role again:
+      {{ item.content | b64decode | trim }}
+   loop: "{{ claude_operator_pass_pubkeys.results }}"
+   loop_control:
+    label: "{{ item.item.item.item.name | default('') }}"
+   when: item.content is defined
+
+ # pass encrypts to the key ids in .gpg-id, and decrypting needs the matching
+ # secret key in the operator's own keyring. Re-reading the stat after the clone
+ # so a store cloned in this run is checked in this run.
+ - name: check which password stores name their gpg keys
+   become: yes
+   ansible.builtin.stat:
+    path: "/home/{{ item.name }}/{{ claude_operator_pass_dirname }}/.gpg-id"
+   loop: "{{ claude_operator_pass_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+   register: claude_operator_pass_gpg_ids
+
+ - name: check whether the operators hold the stores' secret gpg keys
+   become: yes
+   become_user: "{{ item.item.name }}"
+   ansible.builtin.shell: >-
+    gpg --batch --list-secret-keys
+    $(grep -v '^[[:space:]]*$' {{ item.stat.path | quote }})
+   loop: "{{ claude_operator_pass_gpg_ids.results }}"
+   loop_control:
+    label: "{{ item.item.name }}"
+   when: item.stat.exists
+   register: claude_operator_pass_secret_keys
+   changed_when: false
+   failed_when: false
+   check_mode: no
+
+ - name: report the accounts that still need the secret gpg key
+   ansible.builtin.debug:
+    msg: >-
+      {{ item.item.item.name }} has no secret key for
+      {{ item.item.stat.path }}. Import it by hand from a machine that holds it:
+      "gpg --export-secret-keys --armor <id> | ssh {{ item.item.item.name }}@{{ inventory_hostname }} gpg --import",
+      then mark it trusted:
+      "ssh -t {{ item.item.item.name }}@{{ inventory_hostname }} gpg --edit-key <id> trust"
+      (5, ultimate) - otherwise "pass insert" refuses to encrypt to it.
+   loop: "{{ claude_operator_pass_secret_keys.results }}"
+   loop_control:
+    label: "{{ item.item.item.name }}"
+   when: item.rc is defined and item.rc != 0

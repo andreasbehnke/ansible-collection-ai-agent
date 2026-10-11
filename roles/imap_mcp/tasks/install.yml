@@ -27,6 +27,38 @@
     group: "{{ imap_mcp_group }}"
     mode: "0700"
 
+ # Handoff directory for downloaded attachments. With a reader group it is setgid,
+ # so files the service writes belong to that group and the consumer (the agent)
+ # can read but not write them; the credentials in imap_mcp_home stay private.
+ - name: create the attachment download directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ imap_mcp_download_dir }}"
+    state: directory
+    owner: "{{ imap_mcp_user }}"
+    group: "{{ imap_mcp_download_reader_group if imap_mcp_download_reader_group | length > 0 else imap_mcp_group }}"
+    mode: "{{ '2750' if imap_mcp_download_reader_group | length > 0 else '0700' }}"
+
+ # Attachments are transient: let systemd-tmpfiles-clean age them out.
+ - name: age out old attachments
+   become: yes
+   ansible.builtin.copy:
+    dest: "/etc/tmpfiles.d/{{ imap_mcp_service_name }}.conf"
+    content: |
+      # Managed by Ansible (imap_mcp role), do not edit.
+      e {{ imap_mcp_download_dir }} - - - {{ imap_mcp_download_max_age }}
+    owner: root
+    group: root
+    mode: "0644"
+   when: imap_mcp_download_max_age | length > 0
+
+ - name: remove the attachment age-out rule
+   become: yes
+   ansible.builtin.file:
+    path: "/etc/tmpfiles.d/{{ imap_mcp_service_name }}.conf"
+    state: absent
+   when: imap_mcp_download_max_age | length == 0
+
  # ---- immutable code -------------------------------------------------------
  # Cloned and built as root and left root owned: the service user only executes
  # it, the agent (a different user again) can neither read the credentials nor

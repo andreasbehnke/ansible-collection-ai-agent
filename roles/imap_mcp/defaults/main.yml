@@ -47,6 +47,18 @@
   # the service user, unreadable to the agent.
   imap_mcp_home: /var/lib/imap-mcp
 
+  # ---- attachment downloads ----
+  # imap_download_attachment writes files here (passed as IMAP_DOWNLOAD_DIR).
+  # Kept outside imap_mcp_home: upstream defaults to ~/Downloads, inside the 0700
+  # credential directory, which hands the agent a path it cannot open.
+  imap_mcp_download_dir: /var/lib/imap-mcp-attachments
+  # Group allowed to read the downloaded files (e.g. the agent's group). The
+  # directory becomes setgid 2750 so every file inherits it, and the service
+  # creates files 0640. Empty keeps the directory private to the service user.
+  imap_mcp_download_reader_group: ""
+  # Age after which systemd-tmpfiles removes old attachments; empty disables it.
+  imap_mcp_download_max_age: "7d"
+
   # ---- MCP endpoint ----
   # The bridge has no authentication, it must stay on the loopback interface.
   imap_mcp_http_host: "127.0.0.1"

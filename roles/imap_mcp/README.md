@@ -25,6 +25,7 @@ binds `0.0.0.0`).
 | `/var/lib/imap-mcp` | `imap-mcp:imap-mcp` | `0700` | `HOME` / state directory |
 | `/var/lib/imap-mcp/.imap-mcp/accounts.json` | `imap-mcp:imap-mcp` | `0600` | AES-encrypted account store - **not readable by the agent** |
 | `/var/lib/imap-mcp/.imap-mcp/.key` | `imap-mcp:imap-mcp` | `0600` | its encryption key |
+| `/var/lib/imap-mcp-attachments` | `imap-mcp:<reader group>` | `2750` | `IMAP_DOWNLOAD_DIR`: files saved by `imap_download_attachment` (`0640`), readable by `imap_mcp_download_reader_group`, aged out after `imap_mcp_download_max_age`. `0700` without a reader group |
 
 The endpoint is `http://{{ imap_mcp_http_host }}:{{ imap_mcp_port }}{{ imap_mcp_proxy_path }}`
 (`http://127.0.0.1:9000/mcp` by default). It has **no authentication**, so it is asserted to a
@@ -127,6 +128,9 @@ touching `pass`.
 | `imap_mcp_user` / `imap_mcp_group` | `imap-mcp` | service identity |
 | `imap_mcp_service_name` | `imap-mcp` | systemd unit name |
 | `imap_mcp_home` | `/var/lib/imap-mcp` | `HOME` / state directory holding the credentials |
+| `imap_mcp_download_dir` | `/var/lib/imap-mcp-attachments` | where `imap_download_attachment` saves files, outside the credential home |
+| `imap_mcp_download_reader_group` | `""` | group allowed to read downloaded attachments (the agent's group); empty = private |
+| `imap_mcp_download_max_age` | `7d` | systemd-tmpfiles age for downloaded attachments; empty disables clean-up |
 | `imap_mcp_http_host` | `127.0.0.1` | endpoint address, asserted to be loopback |
 | `imap_mcp_port` | `9000` | endpoint port |
 | `imap_mcp_enabled_tools` | read set + `imap_save_draft` | server-side tool allowlist |

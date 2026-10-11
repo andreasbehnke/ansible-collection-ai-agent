@@ -13,21 +13,27 @@ Environment=HOME={{ imap_mcp_home }}
 # Server side tool allowlist: the imap-mcp-server registers only these tools, so
 # the agent gets read access plus imap_save_draft and nothing else.
 Environment=IMAP_MCP_ENABLED_TOOLS={{ imap_mcp_enabled_tools | join(',') }}
+# imap_download_attachment saves here instead of ~/Downloads inside the private home.
+Environment=IMAP_DOWNLOAD_DIR={{ imap_mcp_download_dir }}
 # mcp-proxy binds the loopback interface and bridges the stdio server to
 # streamable HTTP; --pass-environment hands the allowlist to the child.
 ExecStart={{ imap_mcp_proxy_dir }}/bin/mcp-proxy --host {{ imap_mcp_http_host }} --port {{ imap_mcp_port }} --stateless --pass-environment -- {{ imap_mcp_node_bin }} {{ imap_mcp_code_dir }}/dist/index.js
 
 Restart=on-failure
 RestartSec=10
-UMask=0077
+# 0027 so downloaded attachments are group readable (0640) for the reader group
+# of the setgid download directory. The credentials stay private: they live in
+# the 0700 home and are restored 0600.
+UMask=0027
 
 # The code and the bridge are root owned and read only to the service; only the
-# state directory (the encrypted account store) is writable.
+# state directory (the encrypted account store) and the download directory are
+# writable.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths={{ imap_mcp_home }}
+ReadWritePaths={{ imap_mcp_home }} {{ imap_mcp_download_dir }}
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

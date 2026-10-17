@@ -129,8 +129,14 @@ every sibling is passed as `--add-dir`, so one session sees the whole set. `--wo
 the repository it runs in - git has no cross repository worktree, and the wrapper does not pretend
 otherwise.
 
-Both things the wrapper's `--help` warns about are worth repeating: a new worktree is a new path and
-gets its **own** trust dialog, and its **own** session history.
+What the wrapper's `--help` warns about is worth repeating: `--worktree` refuses a project whose own
+trust dialog has never been accepted - trust in `~/work` does not count - so start
+`claude-session <project>` once and accept it before asking for a worktree. A new worktree is then a
+new path and gets its **own** trust dialog, and its **own** session history.
+
+**A failed start stays on screen.** tmux closes a session as soon as its only pane exits, which would
+take Claude's error message with it and make the command look as if it simply returned. When Claude
+exits non-zero the pane prints the status and waits for Enter; a normal `/exit` closes as before.
 
 ### The login banner
 

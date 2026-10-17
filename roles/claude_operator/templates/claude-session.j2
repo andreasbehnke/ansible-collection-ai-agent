@@ -45,8 +45,11 @@ that is the session's working directory. If it CONTAINS repositories, the first
 one is the working directory and every sibling is passed as --add-dir, so one
 session sees the whole set - that is the multi repository case.
 
-Two things worth knowing, because both cost an afternoon otherwise:
+Three things worth knowing, because each costs an afternoon otherwise:
 
+  * "--worktree" refuses a project whose trust dialog has not been accepted -
+    trust in the workspace root does not count. Start "claude-session <project>"
+    once and accept it before asking for a worktree.
   * A new worktree is a new path, so it gets its OWN workspace trust dialog.
     Accept it once, in that directory.
   * Session history is keyed to the working directory, under
@@ -148,6 +151,11 @@ if [ "${#add_dirs[@]}" -gt 0 ]; then
   args+=("${add_dirs[@]}")
 fi
 
+# tmux closes a session the moment its only pane exits, and a Claude that fails
+# to start would take its error message with it - the command then just looks
+# like it returned. On a non-zero exit the pane waits for Enter instead.
+on_failure='|| { s=$?; printf "\nclaude exited with status %s - press Enter to close\n" "$s"; read -r _; }'
+
 # ---- a worktree of its own: Claude Code makes the tree, tmux the session ----
 # Not "claude --worktree --tmux": that runs the tmux client as a CHILD of a
 # Claude process, which outlives a detach - Ctrl-b d then leaves a blinking
@@ -169,6 +177,7 @@ if [ -n "$worktree" ]; then
     *) conflicts= ;;
   esac
   command_line="$(printf '%q ' "$CLAUDE" --worktree "$worktree" "${args[@]}")"
+  command_line+="$on_failure"
   exec tmux new-session -A -s "$session" -c "$cwd" \
     -e "CLAUDE_CODE_TMUX_SESSION=$session" \
     -e "CLAUDE_CODE_TMUX_PREFIX=$prefix" \
@@ -187,5 +196,6 @@ fi
 # tmux takes the command as ONE argument and re-splits it, so quote it back
 # together rather than passing an argv.
 command_line="$(printf '%q ' "$CLAUDE" "${args[@]}")"
+command_line+="$on_failure"
 exec tmux new-session -s "$session" -c "$cwd" "$command_line"
 {% endraw %}

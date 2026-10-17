@@ -25,8 +25,9 @@ anything else from the private infrastructure it is used from - examples use pla
     side tool allowlist of read only tools plus imap_save_draft
   * buzz - installs the buzz CLI the Hermes Buzz platform adapter shells out to,
     extracted from the upstream desktop release because no standalone CLI artifact
-    is published; no service and no state, the CLI takes identity and relay from
-    the environment on each call
+    is published; no service and no state, the CLI takes identity, relay and owner
+    attestation from the environment on each call, and the role publishes the
+    identity's profile carrying that attestation
   * claude_operator - provisions a host for running Claude Code as the operator,
     interactively and through Remote Control; pinned root owned Claude Code, one login
     account per operator with a workspace root under their home, and the claude-session
@@ -39,8 +40,13 @@ anything else from the private infrastructure it is used from - examples use pla
     imap_add_account tool over a one-shot stdio MCP session
   * imap_mcp/export_account.py - exports the encrypted account store into the password
     store
+  * buzz/bip340.py - the BIP-340 Schnorr maths the buzz tools share (x-only public
+    keys, signing, verification), self-tested against the published vectors
   * buzz/new_identity.py - generates the agent's Nostr keypair, self-testing its
-    curve implementation against the BIP-340 vector before printing
+    curve implementation against the BIP-340 vectors before printing
+  * buzz/attest.py - mints the owner's NIP-OA auth tag for an agent identity, the
+    attestation without which Buzz Desktop shows the agent as a person; the owner
+    key is read from stdin and never stored
   * claude_operator/check_clipboard.py - proves copy and paste between the workstation
     and a Claude session on an operator host, by driving a real Claude in tmux over
     ssh -X and reading the local clipboard

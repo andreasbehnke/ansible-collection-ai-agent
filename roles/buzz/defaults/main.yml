@@ -14,9 +14,9 @@
   #
   # To bump: pick a desktop-v* release, update both the version and the sha256
   # (sha256sum of the downloaded .deb).
-  buzz_version: "desktop-v0.5.23"
+  buzz_version: "desktop-v0.5.28"
   buzz_deb_url: "https://github.com/block/buzz/releases/download/{{ buzz_version }}/Buzz_{{ buzz_version | regex_replace('^desktop-v', '') }}_amd64.deb"
-  buzz_deb_sha256: "94f1e50021f88f8864f568c86a8ea2b39993da64e3fe8d86bf731cd00c1c9cce"
+  buzz_deb_sha256: "53609fa586a787871f080b0bfce679633e457f650982411c81ba104648c388cb"
 
   # Installed root owned, and the path is handed to the adapter as BUZZ_CLI_PATH
   # by the composing playbook. Both halves matter: the adapter's own resolution
@@ -43,7 +43,8 @@
   # so a nameless agent cannot be @-mentioned in a channel at all.
   #
   # Empty means the role only installs the CLI. Set all three to have it
-  # publish the profile, idempotently (only when the published name differs).
+  # publish the profile, idempotently (only when the published name, or the
+  # owner attestation below, differs from what the relay holds).
   buzz_profile: {}
   #   name: "Agent"            # display name, the one people @-mention
   #   about: "..."             # optional bio
@@ -51,3 +52,26 @@
   # pass ENTRY PATH of the identity's 64-char hex private key; read on the
   # controller, handed to the CLI through the environment only, never argv.
   buzz_private_key_entry: ""
+
+  # ---- owner attestation (optional) ----
+  # The NIP-OA auth tag by which the community OWNER vouches for this agent's
+  # key: ["auth", "<owner pubkey>", "<conditions>", "<sig>"]. Without it the
+  # agent is just a member with a name - Buzz Desktop shows it as a person
+  # rather than as your agent, and other agents' sibling admission gates drop
+  # its mentions without logging anything (block/buzz#5492).
+  #
+  # The CLI documents it as "NIP-OA auth tag JSON (owner attestation). Injected
+  # into every signed event", so setting this is what makes the republished
+  # kind:0 profile - and every message the agent sends afterwards - carry the
+  # attestation. The relay then answers `users get` with owner_pubkey set,
+  # which is how the profile task below knows whether it has landed.
+  #
+  # Public by construction (an owner pubkey, the conditions and a signature), so
+  # it belongs here and in host_vars, not in the password store. Mint it on the
+  # controller with the owner key, which never leaves it:
+  #
+  #   pass show private/network/service/buzz/owner-private-key \
+  #     | tools/buzz/attest.py <the agent's public key>
+  #
+  # Empty means the profile is published unattested, as before.
+  buzz_auth_tag: ""

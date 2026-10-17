@@ -90,8 +90,10 @@ and password store entries.
 Buzz is a Nostr based workspace where a community is one relay, so this role installs
 the `buzz` CLI the Hermes adapter shells out to - pinned, checksum verified and
 extracted from the upstream desktop release, since no standalone CLI is published. No
-service and no state; see [`roles/buzz/README.md`](roles/buzz/README.md) for the
-three-key identity model and why the CLI path must be pinned, not just the binary.
+service and no state; it also publishes the identity's profile and the owner
+attestation that makes the app treat it as an agent rather than a person. See
+[`roles/buzz/README.md`](roles/buzz/README.md) for the three-key identity model and
+why the CLI path must be pinned, not just the binary.
 
 ### [claude_operator](roles/claude_operator/README.md)
 

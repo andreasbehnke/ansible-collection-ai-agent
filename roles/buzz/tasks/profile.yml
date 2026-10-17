@@ -15,18 +15,29 @@
    no_log: true
 
  # `users get` answers [] for an identity that never published a profile, and a
- # one-element list with display_name once it has.
+ # one-element list with display_name once it has. It also reports owner_pubkey,
+ # which the relay fills in from the NIP-OA auth tag on the stored kind:0 - so
+ # the owner's pubkey appearing in the answer is proof that the attestation
+ # landed. Looking for the pubkey itself rather than a named field keeps this
+ # independent of how the CLI spells it.
  - name: compare the published profile with the wanted one
    ansible.builtin.set_fact:
     buzz_profile_published_name: "{{ ((buzz_profile_read.stdout | from_json) | first | default({})).display_name | default('') }}"
+    buzz_profile_attested: "{{ buzz_auth_tag | length == 0
+                               or (buzz_auth_tag | from_json)[1] in buzz_profile_read.stdout }}"
 
+ # The auth tag reaches the CLI the way the key does, through the environment:
+ # it is "injected into every signed event", which is what puts it on the
+ # republished kind:0. Passed only when set, so a host without an attestation
+ # hands the CLI no empty tag to reject.
  - name: publish the buzz profile
    become: yes
    ansible.builtin.command:
     argv: "{{ [buzz_bin, 'users', 'set-profile', '--name', buzz_profile.name]
               + (['--about', buzz_profile.about] if buzz_profile.about | default('') | length > 0 else []) }}"
-   environment:
-    BUZZ_RELAY_URL: "{{ buzz_relay_url }}"
-    BUZZ_PRIVATE_KEY: "{{ lookup('community.general.passwordstore', buzz_private_key_entry) }}"
-   when: buzz_profile_published_name != buzz_profile.name
+   environment: >-
+    {{ {'BUZZ_RELAY_URL': buzz_relay_url,
+        'BUZZ_PRIVATE_KEY': lookup('community.general.passwordstore', buzz_private_key_entry)}
+       | combine({'BUZZ_AUTH_TAG': buzz_auth_tag} if buzz_auth_tag | length > 0 else {}) }}
+   when: buzz_profile_published_name != buzz_profile.name or not buzz_profile_attested | bool
    no_log: true

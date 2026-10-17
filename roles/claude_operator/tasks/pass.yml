@@ -124,3 +124,45 @@
    loop_control:
     label: "{{ item.item.item.name }}"
    when: item.rc is defined and item.rc != 0
+
+ # How long gpg-agent keeps the store key's passphrase once it was unlocked.
+ # Claude Code's Bash tool has no terminal, so the sessions live off this cache;
+ # gpg-agent's defaults (10 minutes since last use, 2 hours at most) expire
+ # mid-session. Both timeouts get the same value: raising only default-cache-ttl
+ # stays capped by max-cache-ttl. Unset, gpg-agent.conf is left alone.
+ - name: create the operators' gnupg homes
+   become: yes
+   ansible.builtin.file:
+    path: "/home/{{ item.name }}/.gnupg"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0700"
+   loop: "{{ claude_operator_pass_users }}"
+   loop_control:
+    label: "{{ item.name }}"
+   when: claude_operator_pass_timeout is defined
+
+ - name: set the gpg-agent passphrase cache timeouts
+   become: yes
+   ansible.builtin.lineinfile:
+    path: "/home/{{ item.0.name }}/.gnupg/gpg-agent.conf"
+    regexp: "^\\s*{{ item.1 }}\\b"
+    line: "{{ item.1 }} {{ claude_operator_pass_timeout }}"
+    create: yes
+    owner: "{{ item.0.name }}"
+    group: "{{ item.0.name }}"
+    mode: "0600"
+   loop: "{{ claude_operator_pass_users | product(['default-cache-ttl', 'max-cache-ttl']) | list }}"
+   loop_control:
+    label: "{{ item.0.name }}: {{ item.1 }}"
+   when: claude_operator_pass_timeout is defined
+   register: claude_operator_pass_agent_conf
+
+ # gpg-agent reads its config only at start or on reload. A reload also drops
+ # the cached passphrases, so it only runs for a changed config.
+ - name: reload gpg-agent
+   become: yes
+   become_user: "{{ item }}"
+   ansible.builtin.command: gpg-connect-agent reloadagent /bye
+   loop: "{{ claude_operator_pass_agent_conf.results | default([]) | selectattr('changed', 'defined') | selectattr('changed') | map(attribute='item') | map('first') | map(attribute='name') | unique | list }}"

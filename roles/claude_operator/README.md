@@ -321,7 +321,10 @@ $ ssh -t <operator>@<host> gpg --edit-key <id> trust   # 5, ultimate
 
 Claude Code's Bash tool has no terminal, so pinentry cannot ask it for the passphrase. Unlock the key
 once from a terminal (`pass show <any entry>` in a tmux window); the sessions then use gpg-agent's
-cached passphrase until it expires.
+cached passphrase until it expires. gpg-agent's defaults (10 minutes since last use, 2 hours at most) are
+short for a working day; set `claude_operator_pass_timeout` (seconds, e.g. `28800` for 8 hours) and the role
+writes it as `default-cache-ttl` and `max-cache-ttl` to each account's `~/.gnupg/gpg-agent.conf` and reloads
+the agent. The reload drops the cached passphrase, so unlock once more after a changed timeout.
 
 ## Variables
 
@@ -332,6 +335,7 @@ cached passphrase until it expires.
 | `claude_operator_pass_packages` | `[pass, gnupg, pinentry-curses]` | Installed when any account has a `pass_repository` |
 | `claude_operator_pass_dirname` | `.password-store` | Where the store is cloned, relative to each home. pass' own default; anything else is exported as `PASSWORD_STORE_DIR` |
 | `claude_operator_pass_profile_path` | `/etc/profile.d/claude-operator-pass.sh` | Sets `GPG_TTY`, and `PASSWORD_STORE_DIR` for a non default store |
+| `claude_operator_pass_timeout` | undefined | Seconds gpg-agent caches the store key's passphrase (`default-cache-ttl` and `max-cache-ttl`). Undefined leaves `gpg-agent.conf` alone |
 | `claude_operator_claude_version` | `"2.1.238"` | Pinned Claude Code release. The floor is higher than it looks: reconnect after a stale token needs 2.1.224, effort control from a device needs 2.1.234 |
 | `claude_operator_npm_prefix` | `/usr/local` | npm `--prefix` for the global install |
 | `claude_operator_bin` | `/usr/local/bin/claude` | The installed launcher |

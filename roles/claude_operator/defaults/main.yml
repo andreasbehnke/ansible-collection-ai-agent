@@ -106,6 +106,10 @@
   # profile.d snippet below.
   claude_operator_pass_dirname: .password-store
   claude_operator_pass_profile_path: /etc/profile.d/claude-operator-pass.sh
+  # Seconds gpg-agent keeps the store key's passphrase after it was unlocked,
+  # written as default-cache-ttl and max-cache-ttl to each account's
+  # ~/.gnupg/gpg-agent.conf. Undefined by default: gpg-agent.conf is left alone.
+  # claude_operator_pass_timeout: 28800
 
   # ---- workspaces ----
   # Working trees live under ~/<dirname>, one directory per project, and they are

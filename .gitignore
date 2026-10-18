@@ -1,3 +1,6 @@
 *.retry
 *.tar.gz
 __pycache__/
+
+# Claude Code session worktrees - checkouts of this repo, never content of it
+.claude/worktrees/

@@ -21,4 +21,4 @@ issues: https://github.com/andreasbehnke/ansible-collection-ai-agent/issues
 build_ignore:
   - .git
   - .gitignore
-  - AGENT.md
+  - AGENTS.md

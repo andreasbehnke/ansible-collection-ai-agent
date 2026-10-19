@@ -29,16 +29,21 @@ usage() {
   cat <<'USAGE'
 claude-session - start or reattach a tmux hosted Claude Code session
 
-  claude-session                        list projects and live sessions
+  claude-session                        pick a live session, arrows and Enter
   claude-session <project>              attach the project's session, or start one
   claude-session <project> <worktree>   new git worktree, in its own tmux session
-  claude-session -r <project> [...]     the same, with Remote Control enabled
+  claude-session --no-remote <project> [...]   the same, without Remote Control
 
 Options:
-  -r, --remote    enable Remote Control for the session, so it can be driven
-                  from claude.ai/code or the Claude mobile app. The session
-                  keeps running here; the device is a window, not a runtime.
+  --no-remote     start the session without Remote Control. By default a new
+                  session can be driven from claude.ai/code or the Claude
+                  mobile app, which stores its transcript on Anthropic's
+                  servers; the session keeps running here, the device is a
+                  window, not a runtime. Only a starting session takes the
+                  flag - attaching keeps what the session was started with.
   -h, --help      this text
+
+Without a terminal, or with no live session, it lists projects and sessions.
 
 A project is a directory under the workspace root. If it is a git repository,
 that is the session's working directory. If it CONTAINS repositories, the first
@@ -64,10 +69,10 @@ branched; the others are added read-write as they are.
 USAGE
 }
 
-remote=0
+remote=1
 while [ $# -gt 0 ]; do
   case "$1" in
-    -r|--remote) remote=1; shift ;;
+    --no-remote) remote=0; shift ;;
     -h|--help)   usage; exit 0 ;;
     --)          shift; break ;;
     -*)          printf 'claude-session: unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -80,8 +85,64 @@ if [ ! -d "$WORK" ]; then
   exit 1
 fi
 
-# ---- no arguments: show what there is -------------------------------------
+# ---- no arguments: pick a live session, or show what there is -------------
+# Arrow keys (or j/k) move, Enter attaches, q or Esc leaves. The list is drawn
+# on stderr and keys are read from stdin, so it needs a terminal on both; a
+# pipe or a plain "ssh <host> claude-session" gets the listing below instead.
+pick_session() {
+  local -a names=() labels=()
+  local name label
+  while IFS=$'\t' read -r name label; do
+    names+=("$name")
+    labels+=("$label")
+  done < <(tmux list-sessions -F '#{session_name}	#{session_windows} window(s)#{?session_attached, - attached,}' 2>/dev/null || true)
+  [ "${#names[@]}" -gt 0 ] || return 1
+
+  local n="${#names[@]}" sel=0 i key rest
+  # The cursor is hidden while the list is up, and must come back on every
+  # way out - an EXIT trap would not do, exec replaces the shell without one.
+  trap 'printf "\033[?25h\n" >&2; exit 130' INT TERM
+  printf '\033[?25l' >&2
+  printf 'live tmux sessions - arrows to move, Enter to attach, q to leave:\n' >&2
+  while :; do
+    for ((i = 0; i < n; i++)); do
+      if [ "$i" -eq "$sel" ]; then
+        printf '\r\033[K\033[7m > %s \033[0m %s\n' "${names[i]}" "${labels[i]}" >&2
+      else
+        printf '\r\033[K   %s  %s\n' "${names[i]}" "${labels[i]}" >&2
+      fi
+    done
+    IFS= read -rsn1 key || key=q
+    if [ "$key" = $'\033' ]; then
+      # An arrow is ESC [ A, or ESC O A in application cursor mode. A lone Esc
+      # has nothing following it within the timeout.
+      rest=
+      IFS= read -rsn2 -t 0.05 rest || true
+      key+="$rest"
+    fi
+    case "$key" in
+      $'\033[A'|$'\033OA'|k) sel=$(( (sel + n - 1) % n )) ;;
+      $'\033[B'|$'\033OB'|j) sel=$(( (sel + 1) % n )) ;;
+      '')                    break ;;   # Enter - read -n1 swallows the newline
+      q|$'\033')             printf '\033[?25h' >&2; exit 0 ;;
+    esac
+    printf '\033[%dA' "$n" >&2   # back to the top of the list, redraw in place
+  done
+  printf '\033[?25h' >&2
+  trap - INT TERM
+
+  # From inside tmux an attach would nest one tmux in another.
+  if [ -n "${TMUX:-}" ]; then
+    exec tmux switch-client -t "=${names[sel]}"
+  fi
+  exec tmux attach-session -t "=${names[sel]}"
+}
+
 if [ $# -eq 0 ]; then
+  if [ -t 0 ] && [ -t 2 ]; then
+    pick_session || true
+  fi
+
   # Collected into variables rather than piped into "grep -q": with pipefail a
   # short circuiting reader makes the whole pipeline fail, and an empty list
   # would be indistinguishable from a broken one.

@@ -104,11 +104,21 @@ finds it. Choose paths you will not want to change, and back up `~/.claude`.
 ## claude-session
 
 ```console
-claude-session                        # list projects and live sessions
-claude-session <project>              # attach the project's session, or start one
-claude-session <project> <worktree>   # new git worktree, in its own tmux session
-claude-session -r <project> [...]     # the same, with Remote Control enabled
+claude-session                               # pick a live session, arrows and Enter
+claude-session <project>                     # attach the project's session, or start one
+claude-session <project> <worktree>          # new git worktree, in its own tmux session
+claude-session --no-remote <project> [...]   # the same, without Remote Control
 ```
+
+**Remote Control is on by default.** Every session the wrapper starts passes `--remote-control`, so
+it can be picked up from claude.ai/code or the Claude app; `--no-remote` starts one without it. The
+flag only matters when a session starts - attaching to a running one keeps whatever it was started
+with. See [What Remote Control costs](#what-remote-control-costs) before relying on the default.
+
+**Without arguments it is a session picker.** The live tmux sessions are listed; Up and Down (or
+`j` / `k`) move, Enter attaches, `q` or Esc leaves. Run from inside tmux it switches the client
+instead of nesting a second tmux. With no live session, or without a terminal (`ssh <host>
+claude-session`, a pipe), it prints the projects and sessions instead, as before.
 
 New to tmux? [TMUX_CHEAT_SHEET.md](TMUX_CHEAT_SHEET.md) has every key you need - detaching,
 switching sessions, scrolling Claude, copy mode, and the one key tmux takes away from Claude.
@@ -378,8 +388,9 @@ While Remote Control is connected, **the session transcript is stored on Anthrop
 messages, responses and tool activity - so the conversation stays in sync across devices and the
 session can reconnect after a network drop. Execution and filesystem access stay local.
 
-That is a data posture decision, not a detail. Work that must not leave the machine belongs in a
-plain `claude-session <project>`, not the `-r` form. `disableRemoteControl` in
+That is a data posture decision, not a detail - and since the wrapper makes Remote Control the
+default, it is one taken for every session unless you opt out. Work that must not leave the machine
+belongs in `claude-session --no-remote <project>`. `disableRemoteControl` in
 `~/.claude/settings.json` turns the feature off entirely for a host that should never use it.
 
 ## Example

@@ -14,7 +14,7 @@ Alt+w (or Esc, then w).
 |---|---|
 | `Ctrl-b d` | **Detach.** Leaves the session running - Claude keeps working - and returns you to the shell. Closing the terminal or losing the connection does the same |
 | `claude-session <project>` | Reattach the project's session, or start it if there is none |
-| `claude-session` | List projects and live tmux sessions |
+| `claude-session` | Pick a live session (Up/Down, Enter; `q` leaves). Lists projects when there is none |
 | `Ctrl-b s` | Pick a session from a list (arrows, Enter). The quickest way between projects and worktree sessions |
 | `Ctrl-b (` / `Ctrl-b )` | Previous / next session |
 | `Ctrl-b L` | Back to the last session you were in |

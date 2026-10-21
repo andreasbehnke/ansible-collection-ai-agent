@@ -115,6 +115,10 @@ it can be picked up from claude.ai/code or the Claude app; `--no-remote` starts 
 flag only matters when a session starts - attaching to a running one keeps whatever it was started
 with. See [What Remote Control costs](#what-remote-control-costs) before relying on the default.
 
+**The Claude session is named after the tmux session** - `<project>`, or `<repository>_<worktree>`
+for a worktree - through `--name` and `--remote-control <name>`, so the Claude app lists it under
+that name instead of a generated one.
+
 **Without arguments it is a session picker.** The live tmux sessions are listed; Up and Down (or
 `j` / `k`) move, Enter attaches, `q` or Esc leaves. Run from inside tmux it switches the client
 instead of nesting a second tmux. With no live session, or without a terminal (`ssh <host>

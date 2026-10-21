@@ -205,12 +205,19 @@ else
 fi
 
 args=(--permission-mode "$PERMISSION_MODE")
-if [ "$remote" -eq 1 ]; then
-  args+=(--remote-control)
-fi
 if [ "${#add_dirs[@]}" -gt 0 ]; then
   args+=("${add_dirs[@]}")
 fi
+
+# The tmux session's name is the Claude session's name too, so the Claude app
+# and claude.ai/code list the session under it rather than a generated one.
+# "--remote-control" takes the name for the remote side, "--name" for /resume.
+name_session() {
+  args+=(--name "$1")
+  if [ "$remote" -eq 1 ]; then
+    args+=(--remote-control "$1")
+  fi
+}
 
 # tmux closes a session the moment its only pane exits, and a Claude that fails
 # to start would take its error message with it - the command then just looks
@@ -251,6 +258,7 @@ if [ -n "$worktree" ]; then
   if tmux has-session -t "=$session" 2>/dev/null; then
     exec tmux attach-session -t "=$session"
   fi
+  name_session "$session"
 
   prefix="$(tmux show-options -gv prefix 2>/dev/null || true)"
   prefix="${prefix:-C-b}"
@@ -280,6 +288,7 @@ session="${project//[^a-zA-Z0-9_-]/-}"
 if tmux has-session -t "=$session" 2>/dev/null; then
   exec tmux attach-session -t "=$session"
 fi
+name_session "$session"
 
 # tmux takes the command as ONE argument and re-splits it, so quote it back
 # together rather than passing an argv.

@@ -2,10 +2,10 @@
 {{ ansible_managed | comment }}
 # Start or reattach a Claude Code session that survives an SSH disconnect.
 #
-# This is a thin wrapper, on purpose. Claude Code creates git worktrees itself
-# ("--worktree"), so the wrapper only resolves a project name to a directory,
-# works out the multi repository case, keeps the permission mode consistent and
-# runs the tmux session Claude lives in.
+# This is a thin wrapper, on purpose. It resolves a project name to a directory,
+# works out the multi repository case, makes the git worktree a session asks
+# for, keeps the permission mode consistent and runs the tmux session Claude
+# lives in.
 #
 # There is no systemd unit on this host and that is deliberate: a
 # "claude remote-control" server has no local terminal, and an always running one
@@ -50,11 +50,8 @@ that is the session's working directory. If it CONTAINS repositories, the first
 one is the working directory and every sibling is passed as --add-dir, so one
 session sees the whole set - that is the multi repository case.
 
-Three things worth knowing, because each costs an afternoon otherwise:
+Two things worth knowing, because each costs an afternoon otherwise:
 
-  * "--worktree" refuses a project whose trust dialog has not been accepted -
-    trust in the workspace root does not count. Start "claude-session <project>"
-    once and accept it before asking for a worktree.
   * A new worktree is a new path, so it gets its OWN workspace trust dialog.
     Accept it once, in that directory.
   * Session history is keyed to the working directory, under
@@ -63,7 +60,10 @@ Three things worth knowing, because each costs an afternoon otherwise:
     never finds the other's. "claude --resume <id>" resolves from anywhere on
     this host.
 
-"--worktree" branches the repository it runs in. Git has no cross repository
+A worktree lives in .claude/worktrees/<worktree> of the repository it branches,
+on a branch named <worktree> - not "worktree-<worktree>" as "claude --worktree"
+would name it. A new branch starts at the repository's checked out HEAD; an
+existing worktree or branch of that name is reused. Git has no cross repository
 worktree, so in a multi repository project only the primary repository is
 branched; the others are added read-write as they are.
 USAGE
@@ -217,29 +217,56 @@ fi
 # like it returned. On a non-zero exit the pane waits for Enter instead.
 on_failure='|| { s=$?; printf "\nclaude exited with status %s - press Enter to close\n" "$s"; read -r _; }'
 
-# ---- a worktree of its own: Claude Code makes the tree, tmux the session ----
-# Not "claude --worktree --tmux": that runs the tmux client as a CHILD of a
-# Claude process, which outlives a detach - Ctrl-b d then leaves a blinking
-# cursor until Ctrl-C. So tmux is exec'ed here, as for the project session,
-# and Claude runs inside it, making or reusing the worktree. The session name
-# and environment are the ones "--tmux" uses, so sessions it started are still
-# found and Claude still knows which of its keys the tmux prefix takes.
+# ---- a worktree of its own, in its own tmux session -------------------------
+# Not "claude --worktree": it names the branch "worktree-<name>", hardcoded, and
+# the wrapper names it plainly. So git makes the tree here, with the path
+# "--worktree" uses, and Claude starts inside it. While Claude runs the tree is
+# locked, as "--worktree" locks it, so cleanup_worktrees.sh leaves it alone.
+#
+# Not "claude --tmux" either: that runs the tmux client as a CHILD of a Claude
+# process, which outlives a detach - Ctrl-b d then leaves a blinking cursor
+# until Ctrl-C. So tmux is exec'ed here, as for the project session, with the
+# environment "--tmux" sets, so Claude still knows which of its keys the tmux
+# prefix takes.
 if [ -n "$worktree" ]; then
   if [ ! -e "$cwd/.git" ]; then
     printf 'claude-session: not a git repository, so it cannot be branched: %s\n' "$cwd" >&2
     exit 1
   fi
-  session="$(basename "$cwd")_worktree-$worktree"
-  session="${session//[\/.]/_}"
+  if ! git check-ref-format --branch "$worktree" >/dev/null 2>&1; then
+    printf 'claude-session: not a usable branch name: %s\n' "$worktree" >&2
+    exit 1
+  fi
+  tree="$cwd/.claude/worktrees/$worktree"
+  if [ ! -e "$tree/.git" ]; then
+    if git -C "$cwd" show-ref --verify --quiet "refs/heads/$worktree"; then
+      git -C "$cwd" worktree add "$tree" "$worktree" >&2
+    else
+      git -C "$cwd" worktree add -b "$worktree" "$tree" >&2
+    fi
+  fi
+
+  session="$(basename "$cwd")_$worktree"
+  session="${session//[^a-zA-Z0-9_-]/-}"
+  if tmux has-session -t "=$session" 2>/dev/null; then
+    exec tmux attach-session -t "=$session"
+  fi
+
   prefix="$(tmux show-options -gv prefix 2>/dev/null || true)"
   prefix="${prefix:-C-b}"
   case "$prefix" in
     C-b|C-c|C-d|C-t|C-o|C-r|C-s|C-g|C-e) conflicts=1 ;;
     *) conflicts= ;;
   esac
-  command_line="$(printf '%q ' "$CLAUDE" --worktree "$worktree" "${args[@]}")"
-  command_line+="$on_failure"
-  exec tmux new-session -A -s "$session" -c "$cwd" \
+  # Only a lock this session took is released. One already there - another
+  # session in the tree, or one that did not end cleanly - is left as it is.
+  command_line="$(printf '%q ' git -C "$cwd" worktree lock --reason "claude session $worktree" "$tree")"
+  command_line+="2>/dev/null && locked=1; "
+  command_line+="$(printf '%q ' "$CLAUDE" "${args[@]}")"
+  command_line+="$on_failure; "
+  command_line+='[ -z "${locked:-}" ] || '
+  command_line+="$(printf '%q ' git -C "$cwd" worktree unlock "$tree")"
+  exec tmux new-session -s "$session" -c "$tree" \
     -e "CLAUDE_CODE_TMUX_SESSION=$session" \
     -e "CLAUDE_CODE_TMUX_PREFIX=$prefix" \
     -e "CLAUDE_CODE_TMUX_PREFIX_CONFLICTS=$conflicts" \

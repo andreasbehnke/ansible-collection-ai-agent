@@ -127,8 +127,7 @@
   claude_operator_projects: []
 
   # ---- session wrapper ----
-  # Operator convenience over "claude --worktree --tmux=classic" and
-  # "claude --remote-control". Set to "" to skip installing it.
+  # Operator convenience over tmux, git worktrees and "claude --remote-control". Set to "" to skip installing it.
   claude_operator_session_bin: /usr/local/bin/claude-session
   # Login banner. An update-motd.d snippet that shows claude-session's own --help,
   # colourised, so somebody arriving over SSH sees what the host is for without

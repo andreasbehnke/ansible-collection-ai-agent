@@ -5,8 +5,8 @@ interactively over SSH, and from a phone or browser through
 [Remote Control](https://code.claude.com/docs/en/remote-control).
 
 It installs a pinned Claude Code, creates one login account per human operator with a workspace root
-for long lived working trees, and installs `claude-session`, a small wrapper that runs Claude Code in tmux with its own
-`--worktree` / `--remote-control` flags.
+for long lived working trees, and installs `claude-session`, a small wrapper that runs Claude Code in tmux, per project or in a git
+worktree of its own, with Remote Control on.
 
 It deliberately runs **no service and opens no port**. Remote Control is an outbound HTTPS
 connection; the only listener on such a host is `sshd`.
@@ -123,26 +123,33 @@ claude-session`, a pipe), it prints the projects and sessions instead, as before
 New to tmux? [TMUX_CHEAT_SHEET.md](TMUX_CHEAT_SHEET.md) has every key you need - detaching,
 switching sessions, scrolling Claude, copy mode, and the one key tmux takes away from Claude.
 
-It is thin on purpose. Claude Code creates the worktree itself (`--worktree <name>`); the wrapper
-resolves a project name to a directory, handles the multi repository case, keeps the permission mode
-consistent, and runs the tmux session Claude lives in.
+It is thin on purpose. The wrapper resolves a project name to a directory, handles the multi
+repository case, makes the worktree a session asks for, keeps the permission mode consistent, and
+runs the tmux session Claude lives in.
+
+**Worktrees are named plainly.** `claude-session <project> <name>` puts the worktree at
+`.claude/worktrees/<name>` on a branch `<name>`, in a tmux session `<repository>_<name>`. Claude
+Code's own `--worktree <name>` would use the same path but hardcodes the branch as
+`worktree-<name>`, so the wrapper does not use it: git makes the tree, branched from the
+repository's checked out HEAD, and Claude starts inside it. An existing worktree or branch of that
+name is reused. While Claude runs, the tree is locked (`claude session <name>`) as `--worktree`
+would lock it, so `cleanup_worktrees.sh` and `git worktree remove` leave it alone; the lock is
+released when Claude exits. What it gives up is `--worktree`'s exit prompt to keep or remove the
+tree - remove a finished one with `git worktree remove`.
 
 It does **not** use Claude Code's own `--tmux`. That runs the tmux client as a child of a Claude
 process which outlives a detach: `Ctrl-b d` then leaves a blinking cursor instead of the shell
-prompt until you press Ctrl-C. The wrapper execs tmux itself, with the session name
-(`<repository>_worktree-<name>`) and environment `--tmux` would use, so sessions started either way
-are found again.
+prompt until you press Ctrl-C. The wrapper execs tmux itself, with the environment `--tmux` would
+set, so Claude still knows which of its keys the tmux prefix takes.
 
 **Multi repository projects.** If the project directory is itself a git repository, that is the
 session's working directory. If it *contains* repositories, the first is the working directory and
-every sibling is passed as `--add-dir`, so one session sees the whole set. `--worktree` branches only
+every sibling is passed as `--add-dir`, so one session sees the whole set. A worktree branches only
 the repository it runs in - git has no cross repository worktree, and the wrapper does not pretend
 otherwise.
 
-What the wrapper's `--help` warns about is worth repeating: `--worktree` refuses a project whose own
-trust dialog has never been accepted - trust in `~/work` does not count - so start
-`claude-session <project>` once and accept it before asking for a worktree. A new worktree is then a
-new path and gets its **own** trust dialog, and its **own** session history.
+What the wrapper's `--help` warns about is worth repeating: a new worktree is a new path, so it gets
+its **own** workspace trust dialog, and its **own** session history.
 
 **A failed start stays on screen.** tmux closes a session as soon as its only pane exits, which would
 take Claude's error message with it and make the command look as if it simply returned. When Claude

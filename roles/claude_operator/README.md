@@ -366,6 +366,7 @@ the agent. The reload drops the cached passphrase, so unlock once more after a c
 | `claude_operator_node_version` | `"26"` | Required node major version |
 | `claude_operator_node_bin` / `claude_operator_npm_bin` | `/usr/bin/node` / `/usr/bin/npm` | Absolute interpreter paths. Bare names resolve through PATH, where `/usr/local/bin` wins and another package's private node can shadow the pinned one |
 | `claude_operator_packages` | `[tmux, git, xclip, xauth, kitty-terminfo]` | Host packages the operator's sessions need. `tmux` keeps a session alive across an SSH disconnect, `git` is what `--worktree` needs, `xclip` and `xauth` carry the clipboard over X11 forwarding, `kitty-terminfo` lets a kitty client attach to tmux |
+| `claude_operator_install_sshpass` | `false` | Install `sshpass`, for a host that runs ansible playbooks logging into a new host with a password (`-k`) |
 | `claude_operator_x11_clipboard` | `true` | Clipboard over SSH X11 forwarding: the xclip shim, the profile.d snippet and the tmux hook. See [Copy and paste](#copy-and-paste) |
 | `claude_operator_xclip_shim_path` / `claude_operator_xclip_bin` | `/usr/local/bin/xclip` / `/usr/bin/xclip` | The shim, which must precede the real xclip on PATH, and the real one it runs |
 | `claude_operator_x11_profile_path` | `/etc/profile.d/claude-session-display.sh` | Records every SSH login's forwarded display |

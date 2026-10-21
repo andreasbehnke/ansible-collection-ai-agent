@@ -8,6 +8,14 @@
     update_cache: yes
    when: claude_operator_packages | length > 0
 
+ - name: install sshpass
+   become: yes
+   ansible.builtin.apt:
+    name: sshpass
+    state: present
+    update_cache: yes
+   when: claude_operator_install_sshpass
+
  # ---- claude code ---------------------------------------------------------
  # Installed globally as root and left root owned: every account on this host
  # shares one binary at a known version, and an operator cannot drift it without

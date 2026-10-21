@@ -66,6 +66,10 @@
     - xclip
     - xauth
     - kitty-terminfo
+  # sshpass lets ansible log in with a password ("ansible -k"), which a brand new
+  # host without keys needs. Off by default: only a host that runs playbooks
+  # wants it, and it hands passwords around on the command line.
+  claude_operator_install_sshpass: false
 
   # ---- clipboard ----
   # Claude Code copies a selection (Ctrl+C) and pastes (Ctrl+V) through the

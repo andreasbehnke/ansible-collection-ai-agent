@@ -1,0 +1,107 @@
+---
+
+ # MCP servers in the operators' user scope: the "mcpServers" map of
+ # ~/.claude.json, which every session of that account sees whatever its working
+ # directory. Written through Claude Code's own CLI ("claude mcp add-json" and
+ # "claude mcp remove"), never by editing the file: ~/.claude.json is Claude
+ # Code's state file, rewritten by every running session, and the CLI is the one
+ # writer that knows its format. The role only reads the file, to find out
+ # whether anything needs to change.
+ #
+ # Only the servers listed in claude_operator_mcp_servers are touched. A server
+ # the operator added by hand is left alone; one the role should take away is
+ # listed with state: absent.
+ #
+ # Entries usually carry a secret (an Authorization header, an API key in env),
+ # so every task that sees an entry's config sets no_log.
+
+ - name: assert every MCP server entry is complete
+   ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name | length > 0
+      - (item.state | default('present')) in ['present', 'absent']
+      - (item.state | default('present')) == 'absent' or item.config is mapping
+      - item.users | default([]) | difference(claude_operator_users | map(attribute='name')) | length == 0
+    fail_msg: >-
+      Every entry of claude_operator_mcp_servers needs a "name" and, unless its
+      state is "absent", a "config" mapping in Claude Code's server format.
+      "users", when given, may only name accounts from claude_operator_users.
+   loop: "{{ claude_operator_mcp_servers }}"
+   loop_control:
+    label: "{{ item.name | default('<unnamed>') }}"
+
+ # One element per account and server. A server without "users" goes to every
+ # operator account.
+ - name: assign the MCP servers to the operator accounts
+   ansible.builtin.set_fact:
+    claude_operator_mcp_assignments: >-
+      {%- set assignments = [] -%}
+      {%- for server in claude_operator_mcp_servers -%}
+      {%- for user in server.users | default(claude_operator_users | map(attribute='name') | list) -%}
+      {%- set _ = assignments.append({'user': user, 'name': server.name,
+            'state': server.state | default('present'), 'config': server.config | default({})}) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ assignments }}
+   no_log: true
+
+ # ~/.claude.json holds the headers and environments of every configured server.
+ # Absent until the account first ran claude, which reads as "no servers".
+ - name: read the operators' claude state files
+   become: yes
+   ansible.builtin.slurp:
+    src: "/home/{{ item }}/.claude.json"
+   loop: "{{ claude_operator_mcp_assignments | map(attribute='user') | unique | list }}"
+   register: claude_operator_mcp_state_files
+   failed_when: false
+   check_mode: no
+   no_log: true
+
+ - name: collect the MCP servers the accounts have now
+   ansible.builtin.set_fact:
+    claude_operator_mcp_current: >-
+      {%- set current = {} -%}
+      {%- for result in claude_operator_mcp_state_files.results -%}
+      {%- set state = (result.content | default('e30=') | b64decode | from_json) -%}
+      {%- set _ = current.update({result.item: state.mcpServers | default({})}) -%}
+      {%- endfor -%}
+      {{ current }}
+   no_log: true
+
+ # A changed server is removed and added again: "add-json" refuses a name that
+ # already exists. umask 077 because the CLI creates ~/.claude when it is missing,
+ # and with Ubuntu's login umask that directory would land 0775 (see users.yml).
+ - name: remove the MCP servers that are withdrawn or changed
+   become: yes
+   become_user: "{{ item.user }}"
+   ansible.builtin.shell: >-
+    umask 077 &&
+    exec {{ claude_operator_bin | quote }} mcp remove --scope user {{ item.name | quote }}
+   args:
+    chdir: "/home/{{ item.user }}"
+   loop: "{{ claude_operator_mcp_assignments }}"
+   when:
+     - item.name in claude_operator_mcp_current[item.user]
+     - item.state == 'absent' or claude_operator_mcp_current[item.user][item.name] != item.config
+   no_log: true
+
+ # The config travels as an argument - the CLI takes it no other way - so it is
+ # visible in the process list for the moment the command runs. On a host whose
+ # only other users are operators this is accepted; see README.
+ - name: add the missing and changed MCP servers
+   become: yes
+   become_user: "{{ item.user }}"
+   ansible.builtin.shell: >-
+    umask 077 &&
+    exec {{ claude_operator_bin | quote }} mcp add-json --scope user
+    {{ item.name | quote }} {{ item.config | to_json | quote }}
+   args:
+    chdir: "/home/{{ item.user }}"
+   loop: "{{ claude_operator_mcp_assignments }}"
+   when:
+     - item.state == 'present'
+     - item.name not in claude_operator_mcp_current[item.user]
+       or claude_operator_mcp_current[item.user][item.name] != item.config
+   no_log: true

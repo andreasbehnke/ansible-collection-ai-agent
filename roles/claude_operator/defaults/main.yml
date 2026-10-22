@@ -97,6 +97,32 @@
   # server's authorized keys. An existing key is left alone.
   claude_operator_ssh_key_type: ed25519
 
+  # ---- MCP servers ----
+  # MCP servers registered in the operators' user scope (~/.claude.json), so
+  # every session of the account has them whatever its working directory. Each
+  # entry: "name", "config" - the server in Claude Code's own format, exactly
+  # what "claude mcp add-json" takes - and optionally "users", the accounts it
+  # goes to (default: every operator account), and "state" (present, the
+  # default, or absent to take a server away). Servers not listed here, such as
+  # one an operator added by hand, are left alone.
+  #   claude_operator_mcp_servers:
+  #     - name: tracker
+  #       users: [alice]
+  #       config:
+  #         type: http
+  #         url: http://mcp.example.org:3333/mcp
+  #         headers:
+  #           Authorization: "Bearer {{ lookup('community.general.passwordstore', 'example/mcp-token') }}"
+  #     - name: local-tool
+  #       config:
+  #         command: /usr/local/bin/some-mcp-server
+  #         args: ["--stdio"]
+  #         env:
+  #           API_KEY: "{{ lookup('community.general.passwordstore', 'example/api-key') }}"
+  # Secrets belong in a passwordstore lookup, as above: the values end up in
+  # ~/.claude.json (0600), and the role handles them with no_log.
+  claude_operator_mcp_servers: []
+
   # ---- password store ----
   # Optional, per account: an operator entry with "pass_repository" gets pass and
   # gnupg, and the store cloned to ~/<dirname> over ssh. The private gpg key is

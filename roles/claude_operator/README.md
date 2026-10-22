@@ -353,11 +353,46 @@ short for a working day; set `claude_operator_pass_timeout` (seconds, e.g. `2880
 writes it as `default-cache-ttl` and `max-cache-ttl` to each account's `~/.gnupg/gpg-agent.conf` and reloads
 the agent. The reload drops the cached passphrase, so unlock once more after a changed timeout.
 
+## MCP servers
+
+`claude_operator_mcp_servers` registers MCP servers in the operators' **user scope**, the
+`mcpServers` map of `~/.claude.json`, so every session of the account has them whatever its working
+directory. An entry is the server's `name` plus its `config` in Claude Code's own format, exactly what
+`claude mcp add-json` takes:
+
+```yaml
+claude_operator_mcp_servers:
+  - name: tracker                 # remote server, bearer token in a header
+    users: [alice]                # default: every operator account
+    config:
+      type: http
+      url: http://mcp.example.org:3333/mcp
+      headers:
+        Authorization: "Bearer {{ lookup('community.general.passwordstore', 'example/mcp-token') }}"
+  - name: retired
+    state: absent                 # take a server away again
+```
+
+The role writes through the CLI (`claude mcp add-json --scope user`, `claude mcp remove`) and never
+edits `~/.claude.json` itself: that file is Claude Code's state file, rewritten by every running
+session. It only reads the file, to compare each listed server with what is there, so a second run
+changes nothing and a changed entry (a rotated token, a new URL) is removed and added again. Servers
+that are not listed, such as one an operator added by hand, are left alone.
+
+**Secrets.** A header or `env` value usually is one. Supply it through a passwordstore lookup; the
+role handles every entry with `no_log`, and `~/.claude.json` is `0600` in a `0700` home. The CLI
+takes the configuration only as an argument, so it is visible in the host's process list for the
+moment `add-json` runs. On a host whose only other accounts are operators that is accepted here;
+it is the reason not to put this role on a host shared with untrusted users.
+
+Running sessions read the configuration at start: restart a session to pick up a change.
+
 ## Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `claude_operator_users` | `[]` | Login accounts: a list of `{name, authorized_keys}`, optionally with `pass_repository`. Empty by default because this repository is public - the composing playbook supplies them |
+| `claude_operator_mcp_servers` | `[]` | MCP servers for the operators' user scope: a list of `{name, config}`, optionally with `users` and `state` (`present` / `absent`). See [MCP servers](#mcp-servers) |
 | `claude_operator_ssh_key_type` | `ed25519` | Type of the ssh key generated for every account. An existing key is left alone |
 | `claude_operator_pass_packages` | `[pass, gnupg, pinentry-curses]` | Installed when any account has a `pass_repository` |
 | `claude_operator_pass_dirname` | `.password-store` | Where the store is cloned, relative to each home. pass' own default; anything else is exported as `PASSWORD_STORE_DIR` |

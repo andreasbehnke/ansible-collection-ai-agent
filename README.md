@@ -99,6 +99,7 @@ why the CLI path must be pinned, not just the binary.
 
 Claude Code is my own agent rather than one of the hosted ones, so this role provisions a
 host to run it on: a pinned, root owned Claude Code, one login account per operator, and a
-`claude-session` wrapper that runs it in tmux, per project or per worktree - see
+`claude-session` wrapper that runs it in tmux, per project or per worktree, plus the MCP
+servers its accounts should have - see
 [`roles/claude_operator/README.md`](roles/claude_operator/README.md) for its variables, the
 manual sign in it cannot automate, and why it deliberately runs no service.

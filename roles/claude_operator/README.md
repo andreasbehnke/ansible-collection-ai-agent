@@ -416,6 +416,7 @@ Running sessions read the configuration at start: restart a session to pick up a
 | `claude_operator_session_bin` | `/usr/local/bin/claude-session` | Where the wrapper goes. `""` skips it |
 | `claude_operator_motd_path` | `/etc/update-motd.d/99-claude-session` | Login banner showing the wrapper's own `--help`, colourised. `""` installs none |
 | `claude_operator_permission_mode` | `acceptEdits` | Permission mode the wrapper starts sessions with. `dontAsk` is refused by `preflight.yml` |
+| `claude_operator_allow_bypass_permissions` | `false` | Start sessions with `--allow-dangerously-skip-permissions`: `bypassPermissions` becomes selectable in the session (Shift+Tab, plan approval) without being the starting mode |
 
 ### Why `dontAsk` is refused
 
@@ -427,7 +428,9 @@ permission prompts and `AskUserQuestion` are forwarded and stay open until answe
 deny silently instead of asking them.
 
 `bypassPermissions` is not refused, but think twice: the "the machine holds nothing" argument that
-justifies it on a scratch host does not apply to one holding a full scope credential.
+justifies it on a scratch host does not apply to one holding a full scope credential. The same goes
+for `claude_operator_allow_bypass_permissions`: it does not start a session in `bypassPermissions`,
+but it lets anyone driving the session, from a connected device too, switch to it.
 
 ## What Remote Control costs
 

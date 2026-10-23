@@ -19,6 +19,7 @@ set -euo pipefail
 WORK="${HOME}/{{ claude_operator_workspace_dirname }}"
 CLAUDE="{{ claude_operator_bin }}"
 PERMISSION_MODE="{{ claude_operator_permission_mode }}"
+ALLOW_BYPASS="{{ claude_operator_allow_bypass_permissions | bool | ternary('1', '0') }}"
 
 {# Everything below is bash, and bash's "${#array[@]}" opens a jinja comment.
    Rendering stops here so the two languages cannot collide - every variable this
@@ -205,6 +206,9 @@ else
 fi
 
 args=(--permission-mode "$PERMISSION_MODE")
+if [ "$ALLOW_BYPASS" = 1 ]; then
+  args+=(--allow-dangerously-skip-permissions)
+fi
 if [ "${#add_dirs[@]}" -gt 0 ]; then
   args+=("${add_dirs[@]}")
 fi

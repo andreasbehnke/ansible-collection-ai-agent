@@ -172,3 +172,9 @@
   # here - it denies silently instead of asking someone who is right there.
   # preflight.yml refuses it.
   claude_operator_permission_mode: acceptEdits
+  # Start sessions with --allow-dangerously-skip-permissions, which puts
+  # bypassPermissions in the session's Shift+Tab cycle and plan-approval choices
+  # without starting there - the starting mode stays the one above. Off by
+  # default: sessions hold a full scope credential and run with Remote Control
+  # on, so whoever drives one could switch to an unprompted shell.
+  claude_operator_allow_bypass_permissions: false

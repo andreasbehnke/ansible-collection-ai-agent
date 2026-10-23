@@ -13,6 +13,9 @@
 # credential. tmux keeps the session alive AND keeps a terminal attached to it,
 # and the interactive form of Remote Control reconnects by itself after a network
 # outage, where server mode gives up after about ten minutes.
+#
+# Run from inside tmux it never nests a second tmux: it switches the client to
+# the session, or takes over the session it runs in and renames it.
 
 set -euo pipefail
 
@@ -45,6 +48,8 @@ Options:
   -h, --help      this text
 
 Without a terminal, or with no live session, it lists projects and sessions.
+Inside tmux it does not nest: it switches to the session if it is running, and
+otherwise starts Claude in the current pane and renames the current session.
 Tab completes projects, then the worktrees and branches of a project.
 
 A project is a directory under the workspace root. If it is a git repository,
@@ -229,6 +234,60 @@ name_session() {
 # like it returned. On a non-zero exit the pane waits for Enter instead.
 on_failure='|| { s=$?; printf "\nclaude exited with status %s - press Enter to close\n" "$s"; read -r _; }'
 
+# ---- run the session in tmux, without nesting one tmux in another ----------
+# launch <session> <directory> <command line> [<NAME=value>...]
+#
+# A running session is attached, or switched to from inside tmux. A new one is
+# made by tmux - unless this already runs in tmux, where the current session is
+# renamed and Claude starts in this very pane; the shell it was typed in is
+# still there when Claude exits, so no pause on failure is needed. Every session
+# Claude runs in is marked @claude-session: one that already is, a shell in a
+# second window of another project's session, is not renamed out from under the
+# Claude in it, a new session is switched to instead.
+launch() {
+  local session="$1" start="$2" command_line="$3" kv current=
+  shift 3
+  local -a env_args=()
+  for kv in "$@"; do
+    env_args+=(-e "$kv")
+  done
+
+  if [ -n "${TMUX:-}" ]; then
+    current="$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}')"
+  fi
+
+  # The session already typed in is not attached to but taken over, as below.
+  if [ "$current" != "$session" ] && tmux has-session -t "=$session" 2>/dev/null; then
+    if [ -n "$current" ]; then
+      exec tmux switch-client -t "=$session"
+    fi
+    exec tmux attach-session -t "=$session"
+  fi
+
+  # "=name:" - an option's -t takes a pane, and the colon makes the exact
+  # session name resolve as one.
+  if [ -z "$current" ]; then
+    exec tmux new-session -s "$session" -c "$start" ${env_args[@]+"${env_args[@]}"} \
+      "$command_line$on_failure" \; set-option -t "=$session:" @claude-session 1
+  fi
+
+  if [ "$current" != "$session" ]; then
+    if [ -n "$(tmux show-options -qv -t "$TMUX_PANE" @claude-session)" ]; then
+      tmux new-session -d -s "$session" -c "$start" ${env_args[@]+"${env_args[@]}"} \
+        "$command_line$on_failure" \; set-option -t "=$session:" @claude-session 1
+      exec tmux switch-client -t "=$session"
+    fi
+    tmux rename-session -t "$TMUX_PANE" "$session"
+  fi
+  tmux set-option -t "$TMUX_PANE" @claude-session 1
+
+  for kv in "$@"; do
+    export "$kv"
+  done
+  cd "$start"
+  exec bash -c "$command_line"
+}
+
 # ---- a worktree of its own, in its own tmux session -------------------------
 # Not "claude --worktree": it names the branch "worktree-<name>", hardcoded, and
 # the wrapper names it plainly. So git makes the tree here, with the path
@@ -260,9 +319,6 @@ if [ -n "$worktree" ]; then
 
   session="$(basename "$cwd")_$worktree"
   session="${session//[^a-zA-Z0-9_-]/-}"
-  if tmux has-session -t "=$session" 2>/dev/null; then
-    exec tmux attach-session -t "=$session"
-  fi
   name_session "$session"
 
   prefix="$(tmux show-options -gv prefix 2>/dev/null || true)"
@@ -275,29 +331,26 @@ if [ -n "$worktree" ]; then
   # session in the tree, or one that did not end cleanly - is left as it is.
   command_line="$(printf '%q ' git -C "$cwd" worktree lock --reason "claude session $worktree" "$tree")"
   command_line+="2>/dev/null && locked=1; "
+  # Claude's status is kept, not lost to the unlock, so launch's pause on
+  # failure still sees it.
   command_line+="$(printf '%q ' "$CLAUDE" "${args[@]}")"
-  command_line+="$on_failure; "
+  command_line+='; s=$?; '
   command_line+='[ -z "${locked:-}" ] || '
   command_line+="$(printf '%q ' git -C "$cwd" worktree unlock "$tree")"
-  exec tmux new-session -s "$session" -c "$tree" \
-    -e "CLAUDE_CODE_TMUX_SESSION=$session" \
-    -e "CLAUDE_CODE_TMUX_PREFIX=$prefix" \
-    -e "CLAUDE_CODE_TMUX_PREFIX_CONFLICTS=$conflicts" \
-    "$command_line"
+  command_line+='; (exit "$s")'
+  launch "$session" "$tree" "$command_line" \
+    "CLAUDE_CODE_TMUX_SESSION=$session" \
+    "CLAUDE_CODE_TMUX_PREFIX=$prefix" \
+    "CLAUDE_CODE_TMUX_PREFIX_CONFLICTS=$conflicts"
 fi
 
 # ---- the project's own session --------------------------------------------
 # tmux session names cannot carry every character a path can.
 session="${project//[^a-zA-Z0-9_-]/-}"
-
-if tmux has-session -t "=$session" 2>/dev/null; then
-  exec tmux attach-session -t "=$session"
-fi
 name_session "$session"
 
 # tmux takes the command as ONE argument and re-splits it, so quote it back
 # together rather than passing an argv.
 command_line="$(printf '%q ' "$CLAUDE" "${args[@]}")"
-command_line+="$on_failure"
-exec tmux new-session -s "$session" -c "$cwd" "$command_line"
+launch "$session" "$cwd" "$command_line"
 {% endraw %}

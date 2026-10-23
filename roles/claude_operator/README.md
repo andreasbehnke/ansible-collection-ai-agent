@@ -125,6 +125,14 @@ that name instead of a generated one.
 instead of nesting a second tmux. With no live session, or without a terminal (`ssh <host>
 claude-session`, a pipe), it prints the projects and sessions instead, as before.
 
+**Inside tmux it does not nest.** Run from a shell that is already in tmux, `claude-session
+<project> [<worktree>]` switches the client to the session if it is running. Otherwise it renames
+the tmux session it was typed in to the session name and starts Claude in that very pane - the
+shell is still there when Claude exits, and the session keeps its new name. The one exception is
+a session that already hosts a Claude (the wrapper marks those with the tmux option
+`@claude-session`), e.g. a shell in a second window of another project's session: renaming it would
+pull the name out from under that Claude, so a new session is started and switched to instead.
+
 **Tab completes the arguments.** The first argument completes to the projects under the workspace
 root, the second to the project's existing worktrees (`.claude/worktrees/*`) and its local branches
 that no worktree has checked out - the names `claude-session <project> <worktree>` can reuse.
@@ -165,6 +173,7 @@ its **own** workspace trust dialog, and its **own** session history.
 **A failed start stays on screen.** tmux closes a session as soon as its only pane exits, which would
 take Claude's error message with it and make the command look as if it simply returned. When Claude
 exits non-zero the pane prints the status and waits for Enter; a normal `/exit` closes as before.
+A Claude started in a pane taken over inside tmux needs no pause: its shell keeps the message.
 
 ### The login banner
 

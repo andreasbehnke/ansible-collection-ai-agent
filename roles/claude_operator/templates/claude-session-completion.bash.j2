@@ -1,0 +1,71 @@
+{{ ansible_managed | comment }}
+# Bash completion for claude-session.
+#
+#   claude-session <Tab>             projects under the workspace root
+#   claude-session <project> <Tab>   worktrees and free branches of the project's
+#                                    repository
+#   claude-session -<Tab>            options
+#
+# bash-completion loads this file lazily, by the command's name, the first time
+# the command is completed - so the file name must be the command's name.
+
+_claude_session_workspace="{{ claude_operator_workspace_dirname }}"
+_claude_session_command="{{ claude_operator_session_bin | basename }}"
+
+{# Bash below, where "${#array[@]}" would open a jinja comment - see claude-session.j2. #}
+{% raw %}
+_claude_session() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  local work="$HOME/$_claude_session_workspace"
+  local IFS=$'\n'
+  local -a positional=()
+  local i word options_done=
+
+  # Everything before the cursor: options are skipped, the rest are positionals.
+  for ((i = 1; i < COMP_CWORD; i++)); do
+    word="${COMP_WORDS[i]}"
+    if [ -z "$options_done" ]; then
+      case "$word" in
+        --)  options_done=1; continue ;;
+        -*)  continue ;;
+      esac
+    fi
+    positional+=("$word")
+  done
+
+  COMPREPLY=()
+  if [ -z "$options_done" ] && [ "${#positional[@]}" -eq 0 ] && [[ "$cur" == -* ]]; then
+    COMPREPLY=($(compgen -W $'--no-remote\n--help' -- "$cur"))
+    return 0
+  fi
+
+  case "${#positional[@]}" in
+    0)
+      [ -d "$work" ] || return 0
+      COMPREPLY=($(compgen -W "$(find "$work" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null)" -- "$cur"))
+      ;;
+    1)
+      # The repository a worktree branches, resolved as the wrapper resolves it:
+      # the project itself, or the first repository it contains.
+      local dir="$work/${positional[0]}" repo=
+      [ -d "$dir" ] || return 0
+      if [ -e "$dir/.git" ]; then
+        repo="$dir"
+      else
+        repo="$(find "$dir" -mindepth 1 -maxdepth 1 -type d -exec test -e '{}/.git' ';' -print 2>/dev/null | sort | head -n 1)"
+      fi
+      [ -n "$repo" ] || return 0
+      # Existing worktrees by directory name, plus branches no worktree has
+      # checked out - a branch checked out elsewhere cannot get a second tree.
+      local candidates
+      candidates="$(
+        find "$repo/.claude/worktrees" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null
+        git -C "$repo" for-each-ref --format='%(if)%(worktreepath)%(then)%(else)%(refname:short)%(end)' refs/heads 2>/dev/null
+      )"
+      COMPREPLY=($(compgen -W "$(printf '%s\n' "$candidates" | sed '/^$/d' | sort -u)" -- "$cur"))
+      ;;
+  esac
+  return 0
+}
+complete -F _claude_session "$_claude_session_command"
+{% endraw %}

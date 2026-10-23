@@ -60,12 +60,14 @@
   # xclip and xauth carry the clipboard over SSH X11 forwarding, see below.
   # kitty-terminfo: kitty sets TERM=xterm-kitty, which ncurses does not ship, and
   # tmux refuses to attach a client whose terminal it cannot describe.
+  # bash-completion loads claude-session's tab completion, see below.
   claude_operator_packages:
     - tmux
     - git
     - xclip
     - xauth
     - kitty-terminfo
+    - bash-completion
   # sshpass lets ansible log in with a password ("ansible -k"), which a brand new
   # host without keys needs. Off by default: only a host that runs playbooks
   # wants it, and it hands passwords around on the command line.
@@ -159,6 +161,11 @@
   # ---- session wrapper ----
   # Operator convenience over tmux, git worktrees and "claude --remote-control". Set to "" to skip installing it.
   claude_operator_session_bin: /usr/local/bin/claude-session
+  # Bash tab completion for the wrapper: projects, then the worktrees and free
+  # branches of the project's repository. bash-completion loads it lazily by the
+  # command's name, so the file name must be the basename of the wrapper above.
+  # Set to "" to skip it.
+  claude_operator_session_completion_path: /usr/share/bash-completion/completions/claude-session
   # Login banner. An update-motd.d snippet that shows claude-session's own --help,
   # colourised, so somebody arriving over SSH sees what the host is for without
   # having to know the command exists. It runs the wrapper rather than repeating

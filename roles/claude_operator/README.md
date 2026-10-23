@@ -85,6 +85,7 @@ Raise the pin in `claude_operator_claude_version` when you want the new version.
 | `/usr/local/bin/claude` | `root:root` | `0755` | Claude Code, pinned, root owned so no operator can drift it |
 | `/usr/local/lib/node_modules/@anthropic-ai/claude-code` | `root:root` | | The package itself |
 | `/usr/local/bin/claude-session` | `root:root` | `0755` | The session wrapper |
+| `/usr/share/bash-completion/completions/claude-session` | `root:root` | `0644` | Tab completion for the wrapper |
 | `/home/<operator>` | operator | `0700` | Home. Several operators have no business reading each other's |
 | `/home/<operator>/.claude` | operator | `0700` | **The credential and every transcript.** Created by Claude Code with the login user's umask (so it lands `0775`); the role re-asserts `0700` once it exists, but never creates it — its existence is what tells the role the account has signed in |
 | `/home/<operator>/work` | operator | `0755` | Workspace root, one directory per project |
@@ -123,6 +124,12 @@ that name instead of a generated one.
 `j` / `k`) move, Enter attaches, `q` or Esc leaves. Run from inside tmux it switches the client
 instead of nesting a second tmux. With no live session, or without a terminal (`ssh <host>
 claude-session`, a pipe), it prints the projects and sessions instead, as before.
+
+**Tab completes the arguments.** The first argument completes to the projects under the workspace
+root, the second to the project's existing worktrees (`.claude/worktrees/*`) and its local branches
+that no worktree has checked out - the names `claude-session <project> <worktree>` can reuse.
+Options complete after `-`. The completion is loaded by `bash-completion`, which the role installs,
+in any login shell that starts after the playbook ran.
 
 New to tmux? [TMUX_CHEAT_SHEET.md](TMUX_CHEAT_SHEET.md) has every key you need - detaching,
 switching sessions, scrolling Claude, copy mode, and the one key tmux takes away from Claude.
@@ -404,7 +411,7 @@ Running sessions read the configuration at start: restart a session to pick up a
 | `claude_operator_install_node` | `true` | Install node from the NodeSource repository. Set to false to provide it yourself; the role then only asserts the version |
 | `claude_operator_node_version` | `"26"` | Required node major version |
 | `claude_operator_node_bin` / `claude_operator_npm_bin` | `/usr/bin/node` / `/usr/bin/npm` | Absolute interpreter paths. Bare names resolve through PATH, where `/usr/local/bin` wins and another package's private node can shadow the pinned one |
-| `claude_operator_packages` | `[tmux, git, xclip, xauth, kitty-terminfo]` | Host packages the operator's sessions need. `tmux` keeps a session alive across an SSH disconnect, `git` is what `--worktree` needs, `xclip` and `xauth` carry the clipboard over X11 forwarding, `kitty-terminfo` lets a kitty client attach to tmux |
+| `claude_operator_packages` | `[tmux, git, xclip, xauth, kitty-terminfo, bash-completion]` | Host packages the operator's sessions need. `tmux` keeps a session alive across an SSH disconnect, `git` is what `--worktree` needs, `xclip` and `xauth` carry the clipboard over X11 forwarding, `kitty-terminfo` lets a kitty client attach to tmux, `bash-completion` loads the wrapper's tab completion |
 | `claude_operator_install_sshpass` | `false` | Install `sshpass`, for a host that runs ansible playbooks logging into a new host with a password (`-k`) |
 | `claude_operator_x11_clipboard` | `true` | Clipboard over SSH X11 forwarding: the xclip shim, the profile.d snippet and the tmux hook. See [Copy and paste](#copy-and-paste) |
 | `claude_operator_xclip_shim_path` / `claude_operator_xclip_bin` | `/usr/local/bin/xclip` / `/usr/bin/xclip` | The shim, which must precede the real xclip on PATH, and the real one it runs |
@@ -414,6 +421,7 @@ Running sessions read the configuration at start: restart a session to pick up a
 | `claude_operator_workspace_dirname` | `work` | Workspace root, relative to each home. Must not be empty |
 | `claude_operator_projects` | `[]` | Project directories created empty under every workspace root |
 | `claude_operator_session_bin` | `/usr/local/bin/claude-session` | Where the wrapper goes. `""` skips it |
+| `claude_operator_session_completion_path` | `/usr/share/bash-completion/completions/claude-session` | The wrapper's bash tab completion. The file name must be the wrapper's basename, bash-completion loads it by that name. `""` skips it |
 | `claude_operator_motd_path` | `/etc/update-motd.d/99-claude-session` | Login banner showing the wrapper's own `--help`, colourised. `""` installs none |
 | `claude_operator_permission_mode` | `acceptEdits` | Permission mode the wrapper starts sessions with. `dontAsk` is refused by `preflight.yml` |
 | `claude_operator_allow_bypass_permissions` | `false` | Start sessions with `--allow-dangerously-skip-permissions`: `bypassPermissions` becomes selectable in the session (Shift+Tab, plan approval) without being the starting mode |

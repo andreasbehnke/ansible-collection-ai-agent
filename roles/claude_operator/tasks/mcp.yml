@@ -1,6 +1,7 @@
 ---
 
- # MCP servers in the operators' user scope: the "mcpServers" map of
+ # MCP servers in the operators' user scope, configured per account as the
+ # "mcp_servers" of its claude_operator_users entry: the "mcpServers" map of
  # ~/.claude.json, which every session of that account sees whatever its working
  # directory. Written through Claude Code's own CLI ("claude mcp add-json" and
  # "claude mcp remove"), never by editing the file: ~/.claude.json is Claude
@@ -8,7 +9,7 @@
  # writer that knows its format. The role only reads the file, to find out
  # whether anything needs to change.
  #
- # Only the servers listed in claude_operator_mcp_servers are touched. A server
+ # Only the servers listed in an account's mcp_servers are touched. A server
  # the operator added by hand is left alone; one the role should take away is
  # listed with state: absent.
  #
@@ -18,29 +19,27 @@
  - name: assert every MCP server entry is complete
    ansible.builtin.assert:
     that:
-      - item.name is defined
-      - item.name is string
-      - item.name | length > 0
-      - (item.state | default('present')) in ['present', 'absent']
-      - (item.state | default('present')) == 'absent' or item.config is mapping
-      - item.users | default([]) | difference(claude_operator_users | map(attribute='name')) | length == 0
+      - item.1.name is defined
+      - item.1.name is string
+      - item.1.name | length > 0
+      - (item.1.state | default('present')) in ['present', 'absent']
+      - (item.1.state | default('present')) == 'absent' or item.1.config is mapping
+      - item.0.mcp_servers | map(attribute='name') | select('equalto', item.1.name) | list | length == 1
     fail_msg: >-
-      Every entry of claude_operator_mcp_servers needs a "name" and, unless its
-      state is "absent", a "config" mapping in Claude Code's server format.
-      "users", when given, may only name accounts from claude_operator_users.
-   loop: "{{ claude_operator_mcp_servers }}"
+      Every entry of an account's mcp_servers needs a unique "name" and, unless
+      its state is "absent", a "config" mapping in Claude Code's server format.
+   loop: "{{ claude_operator_users | subelements('mcp_servers', skip_missing=True) }}"
    loop_control:
-    label: "{{ item.name | default('<unnamed>') }}"
+    label: "{{ item.0.name }}: {{ item.1.name | default('<unnamed>') }}"
 
- # One element per account and server. A server without "users" goes to every
- # operator account.
+ # One element per account and server.
  - name: assign the MCP servers to the operator accounts
    ansible.builtin.set_fact:
     claude_operator_mcp_assignments: >-
       {%- set assignments = [] -%}
-      {%- for server in claude_operator_mcp_servers -%}
-      {%- for user in server.users | default(claude_operator_users | map(attribute='name') | list) -%}
-      {%- set _ = assignments.append({'user': user, 'name': server.name,
+      {%- for user in claude_operator_users -%}
+      {%- for server in user.mcp_servers | default([]) -%}
+      {%- set _ = assignments.append({'user': user.name, 'name': server.name,
             'state': server.state | default('present'), 'config': server.config | default({})}) -%}
       {%- endfor -%}
       {%- endfor -%}

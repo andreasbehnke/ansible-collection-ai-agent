@@ -121,6 +121,7 @@ touching `pass`.
 | `imap_mcp_repo` / `imap_mcp_version` | upstream / `v1.5.2` | git source and pinned ref of imap-mcp-server |
 | `imap_mcp_code_dir` | `/usr/local/lib/imap-mcp-server` | root-owned code path |
 | `imap_mcp_proxy_version` | `0.12.0` | pinned `mcp-proxy` version (in a root venv) |
+| `imap_mcp_proxy_sdk_version` | `1.28.1` | pinned `mcp` python SDK under `mcp-proxy`, which declares it unbounded; mcp 2.x breaks `mcp-proxy` 0.12.0 |
 | `imap_mcp_proxy_dir` | `/usr/local/lib/mcp-proxy` | bridge venv path |
 | `imap_mcp_proxy_path` | `/mcp` | streamable-HTTP endpoint path |
 | `imap_mcp_install_node` / `imap_mcp_node_version` | `true` / `26` | install Node from NodeSource, or verify only |

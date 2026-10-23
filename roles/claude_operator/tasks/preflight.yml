@@ -34,6 +34,17 @@
    loop_control:
     label: "{{ item.name | default('<unnamed>') }}"
 
+ # 2.0 moved MCP servers onto the accounts. A leftover host wide list would be
+ # ignored without a word, and the sessions would simply lack their tools.
+ - name: assert the host wide MCP server list of 1.x is gone
+   ansible.builtin.assert:
+    that:
+      - claude_operator_mcp_servers is not defined
+    fail_msg: >-
+      claude_operator_mcp_servers is no longer supported. Move each server to
+      the "mcp_servers" list of the claude_operator_users entries that should
+      have it (the former "users" filter); see the role README, "MCP servers".
+
  - name: assert the workspace root is not the home directory
    ansible.builtin.assert:
     that:

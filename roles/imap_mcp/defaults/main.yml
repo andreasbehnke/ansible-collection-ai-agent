@@ -15,6 +15,10 @@
   # supergateway because it binds 127.0.0.1 (supergateway only binds 0.0.0.0).
   # Installed into a root owned venv, so it is immutable like the code. Pinned.
   imap_mcp_proxy_version: "0.12.0"
+  # The MCP python SDK mcp-proxy runs on, pinned with it: mcp-proxy declares it
+  # without an upper bound, and mcp 2.x removed request_ctx, which 0.12.0
+  # imports - a fresh venv then crash-loops on startup. Move both together.
+  imap_mcp_proxy_sdk_version: "1.28.1"
   imap_mcp_proxy_dir: /usr/local/lib/mcp-proxy
   # Streamable-HTTP endpoint path mcp-proxy serves in --stateless mode; the Hermes
   # mcp_servers url is http://{{ imap_mcp_http_host }}:{{ imap_mcp_port }}{{ path }}

@@ -116,7 +116,9 @@
  - name: install mcp-proxy into the virtualenv
    become: yes
    ansible.builtin.pip:
-    name: "mcp-proxy=={{ imap_mcp_proxy_version }}"
+    name:
+      - "mcp-proxy=={{ imap_mcp_proxy_version }}"
+      - "mcp=={{ imap_mcp_proxy_sdk_version }}"
     virtualenv: "{{ imap_mcp_proxy_dir }}"
    notify: restart imap-mcp
 

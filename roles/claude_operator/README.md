@@ -371,23 +371,32 @@ the agent. The reload drops the cached passphrase, so unlock once more after a c
 
 ## MCP servers
 
-`claude_operator_mcp_servers` registers MCP servers in the operators' **user scope**, the
-`mcpServers` map of `~/.claude.json`, so every session of the account has them whatever its working
-directory. An entry is the server's `name` plus its `config` in Claude Code's own format, exactly what
-`claude mcp add-json` takes:
+MCP servers are configured **per account**: the `mcp_servers` list of an entry in
+`claude_operator_users` is registered in that account's **user scope**, the `mcpServers` map of its
+`~/.claude.json`, so every session of the account has them whatever its working directory. Different
+operators get different tool surfaces, and an account gets nothing it is not listed for. An entry is
+the server's `name` plus its `config` in Claude Code's own format, exactly what `claude mcp add-json`
+takes:
 
 ```yaml
-claude_operator_mcp_servers:
-  - name: tracker                 # remote server, bearer token in a header
-    users: [alice]                # default: every operator account
-    config:
-      type: http
-      url: http://mcp.example.org:3333/mcp
-      headers:
-        Authorization: "Bearer {{ lookup('community.general.passwordstore', 'example/mcp-token') }}"
-  - name: retired
-    state: absent                 # take a server away again
+claude_operator_users:
+  - name: alice
+    authorized_keys: [...]
+    mcp_servers:
+      - name: tracker             # remote server, bearer token in a header
+        config:
+          type: http
+          url: http://mcp.example.org:3333/mcp
+          headers:
+            Authorization: "Bearer {{ lookup('community.general.passwordstore', 'example/mcp-token') }}"
+      - name: retired
+        state: absent             # take a server away again
+  - name: bob
+    authorized_keys: [...]        # no mcp_servers: no servers
 ```
+
+Up to 1.x this was a host wide `claude_operator_mcp_servers` with a `users` filter per server. The
+role now refuses that variable in preflight instead of ignoring it.
 
 The role writes through the CLI (`claude mcp add-json --scope user`, `claude mcp remove`) and never
 edits `~/.claude.json` itself: that file is Claude Code's state file, rewritten by every running
@@ -407,8 +416,7 @@ Running sessions read the configuration at start: restart a session to pick up a
 
 | Variable | Default | Description |
 |---|---|---|
-| `claude_operator_users` | `[]` | Login accounts: a list of `{name, authorized_keys}`, optionally with `pass_repository`. Empty by default because this repository is public - the composing playbook supplies them |
-| `claude_operator_mcp_servers` | `[]` | MCP servers for the operators' user scope: a list of `{name, config}`, optionally with `users` and `state` (`present` / `absent`). See [MCP servers](#mcp-servers) |
+| `claude_operator_users` | `[]` | Login accounts: a list of `{name, authorized_keys}`, optionally with `pass_repository` and `mcp_servers` - the account's MCP servers, a list of `{name, config}`, optionally with `state` (`present` / `absent`); see [MCP servers](#mcp-servers). Empty by default because this repository is public - the composing playbook supplies them |
 | `claude_operator_ssh_key_type` | `ed25519` | Type of the ssh key generated for every account. An existing key is left alone |
 | `claude_operator_pass_packages` | `[pass, gnupg, pinentry-curses]` | Installed when any account has a `pass_repository` |
 | `claude_operator_pass_dirname` | `.password-store` | Where the store is cloned, relative to each home. pass' own default; anything else is exported as `PASSWORD_STORE_DIR` |

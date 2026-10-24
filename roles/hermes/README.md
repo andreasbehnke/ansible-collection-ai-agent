@@ -242,6 +242,7 @@ Notes:
 | `hermes_installer_url` | `https://hermes-agent.nousresearch.com/install.sh` | installer, run as root |
 | `hermes_repo_url` | `https://github.com/NousResearch/hermes-agent.git` | resolved against to turn `hermes_version` into a commit |
 | `hermes_bin` | `/usr/local/bin/hermes` | launcher path the installer creates |
+| `hermes_install_browser` | `true` | install the browser tools (agent-browser, Playwright Chromium, browser-use); `false` passes `--skip-browser` and removes the leftovers of an earlier install from `/root` and `HERMES_HOME/bin` - pair it with `agent.disabled_toolsets: [browser]` in `hermes_managed_config` |
 | `hermes_ctl_bin` | `/usr/local/bin/hermesctl` | operator wrapper running the CLI as the service user; `""` skips it |
 | `hermes_code_dir` | `/usr/local/lib/hermes-agent` | code path the installer creates |
 | `hermes_pip_extras` | `[]` | extra pip requirements installed into Hermes' venv for backends shipped as optional extras (e.g. `firecrawl-py==4.17.0` for the firecrawl `web_extract` backend); Hermes restarts when they change |

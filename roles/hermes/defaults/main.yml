@@ -32,6 +32,14 @@
   # Locations the installer uses when it runs as root.
   hermes_bin: /usr/local/bin/hermes
   hermes_code_dir: /usr/local/lib/hermes-agent
+  # Browser tools: the installer brings agent-browser plus Playwright Chromium, and
+  # browser-use as a uv tool. Running as root it puts them under /root (~0.9 GB), so
+  # the sandboxed service user cannot reach them and the browser tools stay
+  # unavailable anyway. false passes --skip-browser (the installer remembers the
+  # opt-out) and removes what an earlier install left behind in /root and the
+  # dangling links to it in HERMES_HOME/bin. Turn the toolset off as well
+  # (agent.disabled_toolsets in hermes_managed_config), or the agent keeps trying.
+  hermes_install_browser: true
   # Operator wrapper that runs the CLI as the service user against its managed
   # state, so a sudo-capable login does not need to know user, HERMES_HOME and
   # the fact that both directories are unreadable to it. Set to "" to skip it.

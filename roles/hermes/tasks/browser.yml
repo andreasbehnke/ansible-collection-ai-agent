@@ -1,0 +1,31 @@
+---
+
+ # Removes the browser stack an install without --skip-browser left behind. The
+ # installer runs as root, so Playwright's Chromium and the browser-use uv tool
+ # landed in root's home, out of reach of the sandboxed service user: the links
+ # to them in HERMES_HOME/bin dangle for the agent and the browser tools never
+ # passed their requirement checks. --skip-browser keeps a later install from
+ # bringing them back; this deletes the copies that are already there.
+ #
+ # node_modules in the code dir is left alone: it belongs to the checkout and the
+ # installer re-asserts it.
+ - name: remove the browser tool links from the state directory
+   become: yes
+   ansible.builtin.file:
+    path: "{{ hermes_home }}/bin/{{ item }}"
+    state: absent
+   loop:
+    - browser
+    - browser-use
+    - browser-use-tui
+    - browseruse
+    - bu
+
+ - name: remove the browser installs in root's home
+   become: yes
+   ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+   loop:
+    - /root/.local/share/uv/tools/browser-use
+    - /root/.cache/ms-playwright

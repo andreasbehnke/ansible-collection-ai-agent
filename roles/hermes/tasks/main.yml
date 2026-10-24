@@ -2,6 +2,8 @@
 
  - include_tasks: preflight.yml
  - include_tasks: install.yml
+ - include_tasks: browser.yml
+   when: not hermes_install_browser
  # After install (it changes the venv), before config/service so the restart-hermes
  # handler that this may queue fires once, at the end, with the deps in place.
  - include_tasks: extras.yml

@@ -100,19 +100,19 @@
  # because ansible hands the script a non-tty stdin. Re-running is routine now
  # that the pin can change, so say it rather than rely on that.
  #
+ # --skip-browser follows hermes_install_browser (see defaults); the installer
+ # records the opt-out, so it also holds for later installs.
+ #
  # The checkout is a shallow --depth 1 clone, so the target commit is usually not
  # present locally; the installer's own "git fetch origin <sha>" fetches it, which
  # is why the full 40 character sha matters.
  - name: install hermes at the pinned commit
    become: yes
    ansible.builtin.command:
-    argv:
-      - /usr/local/src/hermes-install.sh
-      - --commit
-      - "{{ hermes_pinned_commit }}"
-      - --force-commit
-      - --skip-setup
-      - --non-interactive
+    argv: >-
+     {{ ['/usr/local/src/hermes-install.sh', '--commit', hermes_pinned_commit,
+         '--force-commit', '--skip-setup', '--non-interactive']
+        + ([] if hermes_install_browser else ['--skip-browser']) }}
    environment:
     HERMES_HOME: "{{ hermes_home }}"
    vars:
@@ -128,7 +128,8 @@
  # opt-out rather than a broken state. creates: guards it, so it runs once.
  - name: install hermes
    become: yes
-   ansible.builtin.command: /usr/local/src/hermes-install.sh
+   ansible.builtin.command:
+    argv: "{{ ['/usr/local/src/hermes-install.sh'] + ([] if hermes_install_browser else ['--skip-browser']) }}"
    environment:
     HERMES_HOME: "{{ hermes_home }}"
    args:
